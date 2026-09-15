@@ -1,0 +1,33 @@
+# .Rbuildignore works slightly differently than .gitignore
+# the later uses globs, the former uses regex
+
+# housekeeping
+^.*\.Rproj$
+^\.Rproj\.user$
+^\.git$
+^\.github$
+
+# DS_Store in any subdirectory
+\.DS_Store$
+
+# compilation artifacts + others
+^src/.*\.o$
+^src/.*\.so$
+^src/.*\.dylib$
+^.*\.tar\.gz$
+
+# dot in files -- i actually want to keep these ...
+# ^src/Makevars.in$
+
+# files that are the children of dot in files 
+# or generated from heredocs by configure
+^src/Makevars$
+^src/config.h
+
+# files in the root that are important for the package
+# but are not built by R CMD build
+^NEWS.md$
+^TODO.md$
+^README.md$
+^README.Rmd$
+^README_files$%
