@@ -44,7 +44,7 @@ simple_wrapper <- function(framework = c("opencl",
   # specific overheads
   if (framework == "opencl") {
     if (!opencl_is_available()) {
-      stop("opencl compliant devices do not appear to be available")
+      stop("OpenCL compliant devices must exist and be detectable.")
     }
     if(!is(object = context_ptr,
            class2 = "opencl_context")) {

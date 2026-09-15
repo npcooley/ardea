@@ -17,6 +17,10 @@
 ###### -- FUNCTION ------------------------------------------------------------
 
 opencl_make_context <- function(device) {
+  
+  if (!opencl_is_available()) {
+    stop("OpenCL compliant devices must exist and be detectable.")
+  }
   if (!is(object = device,
           class2 = "alternative_device")) {
     stop("'device' must be a single device entry, e.g. opencl_device_information()[[i]]")

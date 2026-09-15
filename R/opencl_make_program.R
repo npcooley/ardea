@@ -9,6 +9,9 @@
 opencl_make_program <- function(cl_file,
                                 context,
                                 build_options = NULL) {
+  if (!opencl_is_available()) {
+    stop("OpenCL compliant devices must exist and be detectable.")
+  }
   if (length(cl_file) != 1 || !is.character(cl_file)) {
     stop("'cl_file' must be a character vector of length 1")
   }

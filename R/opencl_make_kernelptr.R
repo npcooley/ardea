@@ -10,6 +10,9 @@
 
 opencl_make_kernelptr <- function(program,
                                   kernel_names) {
+  if (!opencl_is_available()) {
+    stop("OpenCL compliant devices must exist and be detectable.")
+  }
   if (!is(object = program,
           class2 = "externalptr")) {
     stop("'program' must be an externalptr object")
