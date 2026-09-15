@@ -1,0 +1,45 @@
+# export functions to the local environment
+useDynLib(ardea, .registration = TRUE)
+
+# imports
+importFrom("methods", "is")
+importFrom("utils",
+           "packageVersion",
+           "getS3method")
+
+###### -- opencl default capabilities -----------------------------------------
+
+# device query
+export(opencl_is_available)
+export(opencl_device_information)
+
+# handle management
+export(opencl_make_kernelptr)
+export(opencl_make_program)
+export(opencl_make_context)
+
+# dispatch wrappers
+export(simple_wrapper)
+
+# other
+export(supported_types_by_context)
+
+###### -- sentinel functions for optional capabilities ------------------------
+export(metal_is_available)
+export(cuda_is_available)
+
+###### -- metal functions -----------------------------------------------------
+# these must query `metal_is_available` at the top
+
+# device_query
+export(metal_device_information)
+
+# handle management
+export(metal_make_kernelptr)
+export(metal_make_program)
+export(metal_make_context)
+
+
+# class methods
+S3method(print, "device_list")
+S3method(print, "alternative_device")

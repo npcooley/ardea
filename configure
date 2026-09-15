@@ -1,0 +1,700 @@
+#!/bin/sh
+# configure script for mac / linux
+
+# testing before package is ready
+if [ -z "${R_HOME:-""}" ]; then
+  R_HOME=$(R RHOME)
+fi
+
+# initial script vars
+# the compiler R thinks is the default
+current_cc=$("${R_HOME}/bin/R" CMD config CC)
+# the compiler flags R is using by default
+# echo "${current_cc}"
+current_cflags=$("${R_HOME}/bin/R" CMD config CFLAGS)
+# echo "${current_cflags}"
+# the preprocessor flags R is using by default
+current_cppflags=$("${R_HOME}/bin/R" CMD config CPPFLAGS)
+# echo "${current_cppflags}"
+
+# compilation flag notes:
+# we respect user specified flags and headers for OpenCL and for CUDA, but not
+# for Metal
+
+# openCL notes:
+# -l / -framework == tells compiler what to link against
+#   '-framework' is generally self-contained, but a homebrew openCL install
+#   will need further managing?
+# -L == where to look for the shared object
+# -I == where to look for the headers
+# as far as i can tell, homebrew installations of openCL are missing the 
+# ability to find a dot icd file, so they are -as far as i can tell- not a
+# valid path forward at this time ...
+# most of this is really just practice and preparation for CUDA variable
+# handling, and we *shouldn't* really need it here, though providing it for 
+# linux users is the right choice
+
+# OpenCL variables we should respect if the user has set them:
+
+# ARDEA_OPENCL_INCLUDE
+# directory containing CL/cl.h (or OpenCL/opencl.h)
+opencl_headers="${ARDEA_OPENCL_INCLUDE:-""}"
+if [ -z "${ARDEA_OPENCL_INCLUDE}" ]; then
+  opencl_headers=""
+  printf "no OpenCL headers specified\n"
+  printf "compilation will occur against defaults\n"
+else
+  if [ -d "${ARDEA_OPENCL_INCLUDE}" ]; then
+    opencl_headers="-I${ARDEA_OPENCL_INCLUDE}"
+    printf "user supplied headers will be compiled against with:\n"
+    printf "%s\n" ${opencl_headers}
+  else
+    opencl_headers=""
+    printf "user supplied %s is not a directory!\n" "${ARDEA_OPENCL_INCLUDE}"
+    printf "falling back to default search paths...\n"
+  fi
+fi
+
+# ARDEA_OPENCL_LIBS
+# directory containing libOpenCL.so / libOpenCL.dylib
+opencl_shared_objects="${ARDEA_OPENCL_LIBS:-""}"
+if [ -z "${ARDEA_OPENCL_LIBS}" ]; then
+  opencl_shared_objects=""
+  printf "no OpenCL shared objects specified\n"
+  printf "compilation will occur against defaults\n"
+else
+  if [ -d "${ARDEA_OPENCL_LIBS}" ]; then
+    opencl_shared_objects="-L${ARDEA_OPENCL_LIBS}"
+    # -Wl, == split what follows, up the the next space on commas and pass to
+    # ld, i.e. -Wl,-rpath,<some/path/whatever>
+    # becomes 'ld -rpath <some/path/whatever>'
+    # -rpath bakes a search path for shared library into a binary for runtime
+    opencl_direct_pass_flags="-Wl,-rpath,${ARDEA_OPENCL_LIBS}"
+    printf "user supplied shared objects will be compiled against with:\n"
+    printf "%s\n" ${opencl_shared_objects}
+  else
+    opencl_shared_objects=""
+    opencl_direct_pass_flags=""
+    printf "user supplied %s is not a directory!\n" "${ARDEA_OPENCL_LIBS}"
+    printf "falling back to default search paths...\n"
+  fi
+fi
+
+# we can't just infer everything from nvcc because we won't know if its 
+# present
+# we can try and infer things from CUDA_HOME, but there are a lot of options
+# and i don't want to deal with it yet
+# so for now we are just going to trigger cuda detection from ARDEA env vars
+detect_cuda_libs="${ARDEA_CUDA_LIBS:-""}"
+detect_cuda_stubs="${ARDEA_CUDA_STUBS:-""}"
+detect_cuda_include="${ARDEA_CUDA_INCLUDE:-""}"
+# some CUDA versions may require older compiler versions
+alt_compiler="${ARDEA_ALT_COMPILER:-""}"
+
+op_sys="$(uname -s)"
+
+dir01=$(mktemp -d)
+trap 'rm -rf "${dir01}" && echo "tempfiles removed\n"' EXIT
+
+opencl_test="${dir01}/opencl_test.c"
+opencl_exec="${dir01}/opencl_test"
+
+# homebrew opencl carries with it both an
+# OpenCL/opencl.h
+# AND
+# CL/cl.h
+# they are not the same, so i'm not sure what the consequences of the difference are ...
+
+# use a heredoc to capture our testing scripts
+# << capture_this will perform shell expansion
+# << 'capture_this' will not perform shell expansion
+# preprocessor directives just need the '#' character to be the first non-whitespace character
+cat > "${opencl_test}" << 'capture_this'
+/* ============================================================================
+ * test for openCL platforms and devices
+ * return 0 if 1 or more devices are found
+ * return 1 if no devices are found
+ * 
+ * header guard reflects a dichotomy between Apple's deprecated, but
+ * still existent openCL framework, and Khronos' standard implementation
+ * of OpenCL
+ * ========================================================================= */
+
+#ifdef __APPLE__
+  #include <OpenCL/opencl.h>
+#else
+  #include <CL/cl.h>
+#endif
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+/* ----------------------------------------------------------------------------
+ * wrap clGetDeviceInfo with explicit error checking,
+ * so a failed query is visible instead of silently leaving a
+ * zero-initialized value that looks like a legitimate "0". 
+ * ------------------------------------------------------------------------- */
+static int query_device_info(cl_device_id device,
+                              cl_device_info param,
+                              size_t param_size,
+                              void *out,
+                              const char *param_label) {
+    cl_int err = clGetDeviceInfo(device,
+                                 param,
+                                 param_size,
+                                 out,
+                                 NULL);
+    if (err != CL_SUCCESS) {
+        fprintf(stderr, "  WARNING: failed to query %s (CL error %d)\n",
+                param_label, err);
+        return 1;
+    }
+    return 0;
+}
+
+/* ----------------------------------------------------------------------------
+ * main function
+ * return an int as an exit code
+ * take in nothing (void)
+ * print out device information
+ * ------------------------------------------------------------------------- */
+int main(void) {
+  cl_uint num_platforms = 0;
+  if (clGetPlatformIDs(0, NULL, &num_platforms) != CL_SUCCESS ||
+      num_platforms == 0) {
+    printf("  No OpenCL platforms found\n");
+    return 1;
+  }
+  
+  cl_platform_id *platforms = calloc(num_platforms, sizeof(cl_platform_id));
+  if (platforms == NULL) {
+    fprintf(stderr, "  ERROR: allocation failure\n");
+    return 1;
+  }
+  clGetPlatformIDs(num_platforms, platforms, NULL);
+  
+  for (cl_uint p = 0; p < num_platforms; p++) {
+    cl_uint num_devices = 0;
+    clGetDeviceIDs(platforms[p], CL_DEVICE_TYPE_ALL, 0, NULL, &num_devices);
+    if (num_devices == 0) {
+      printf("  No devices on this platform\n\n");
+      continue;
+    }
+    
+    cl_device_id *devices = calloc(num_devices, sizeof(cl_device_id));
+    if (devices == NULL) {
+      fprintf(stderr, "  ERROR: allocation failure\n");
+      free(platforms);
+      return 1;
+    }
+    clGetDeviceIDs(platforms[p],
+                   CL_DEVICE_TYPE_ALL,
+                   num_devices,
+                   devices,
+                   NULL);
+    
+    for (cl_uint d = 0; d < num_devices; d++) {
+      /* -- instantiate our params ----------------------------------------- */
+      char name[256] = {0};
+      char version[128] = {0};
+      char driver_version[128] = {0};
+      char device_vendor[256] = {0};
+      cl_uint units = 0;
+      cl_device_type dtype = 0;
+      cl_uint max_dims = 0;
+      size_t max_work_group_size = 0;
+      cl_ulong global_mem = 0;
+      cl_ulong max_alloc = 0;
+      cl_ulong local_mem = 0;
+      cl_device_local_mem_type local_mem_type = 0;
+      
+      /* -- query our params ----------------------------------------------- */ 
+      query_device_info(devices[d],
+                        CL_DEVICE_NAME,
+                        sizeof(name),
+                        name,
+                        "CL_DEVICE_NAME");
+      query_device_info(devices[d],
+                        CL_DEVICE_VERSION,
+                        sizeof(version),
+                        version,
+                        "CL_DEVICE_VERSION");
+      query_device_info(devices[d],
+                        CL_DEVICE_VENDOR,
+                        sizeof(device_vendor),
+                        device_vendor,
+                        "CL_DEVICE_VENDOR");
+      query_device_info(devices[d],
+                        CL_DRIVER_VERSION,
+                        sizeof(driver_version),
+                        driver_version,
+                        "CL_DRIVER_VERSION");
+      query_device_info(devices[d],
+                        CL_DEVICE_TYPE,
+                        sizeof(dtype),
+                        &dtype,
+                        "CL_DEVICE_TYPE");
+      query_device_info(devices[d],
+                        CL_DEVICE_MAX_COMPUTE_UNITS,
+                        sizeof(units),
+                        &units,
+                        "CL_DEVICE_MAX_COMPUTE_UNITS");
+      query_device_info(devices[d],
+                        CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS,
+                        sizeof(max_dims),
+                        &max_dims,
+                        "CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS");
+      query_device_info(devices[d],
+                        CL_DEVICE_MAX_WORK_GROUP_SIZE,
+                        sizeof(max_work_group_size),
+                        &max_work_group_size,
+                        "CL_DEVICE_MAX_WORK_GROUP_SIZE");
+      query_device_info(devices[d],
+                        CL_DEVICE_GLOBAL_MEM_SIZE,
+                        sizeof(global_mem),
+                        &global_mem,
+                        "CL_DEVICE_GLOBAL_MEM_SIZE");
+      query_device_info(devices[d],
+                        CL_DEVICE_MAX_MEM_ALLOC_SIZE,
+                        sizeof(max_alloc),
+                        &max_alloc,
+                        "CL_DEVICE_MAX_MEM_ALLOC_SIZE");
+      query_device_info(devices[d],
+                        CL_DEVICE_LOCAL_MEM_SIZE,
+                        sizeof(local_mem),
+                        &local_mem,
+                        "CL_DEVICE_LOCAL_MEM_SIZE");
+      query_device_info(devices[d],
+                        CL_DEVICE_LOCAL_MEM_TYPE,
+                        sizeof(local_mem_type),
+                        &local_mem_type,
+                        "CL_DEVICE_LOCAL_MEM_TYPE");
+      
+      /* ----------------------------------------------------------------------
+       * CL_DEVICE_MAX_WORK_ITEM_SIZES is an array sized by max_dims,
+       * so it has to be allocated dynamically rather than assumed
+       * to be length 3 -- some accelerators report fewer or more. 
+       * ------------------------------------------------------------------- */
+      size_t *max_item_sizes = NULL;
+      if (max_dims > 0) {
+        max_item_sizes = calloc(max_dims, sizeof(size_t));
+        if (max_item_sizes != NULL) {
+          query_device_info(devices[d],
+                            CL_DEVICE_MAX_WORK_ITEM_SIZES,
+                            max_dims * sizeof(size_t),
+                            max_item_sizes,
+                            "CL_DEVICE_MAX_WORK_ITEM_SIZES");
+        }
+      }
+      
+      printf("  OpenCL device: %s\n", name);
+      printf("    type:                  %s\n",
+             (dtype & CL_DEVICE_TYPE_GPU) ? "GPU" :
+               (dtype & CL_DEVICE_TYPE_CPU) ? "CPU" : "OTHER");
+      printf("    device vendor:         %s\n", device_vendor);
+      printf("    device version:        %s\n", version);
+      printf("    driver version:        %s\n", driver_version);
+      printf("    compute units:         %u\n", units);
+      printf("    max work-group size:   %zu\n", max_work_group_size);
+      printf("    max work-item dims:    %u\n", max_dims);
+      if (max_item_sizes != NULL) {
+        printf("    max work-item sizes:   ");
+        for (cl_uint i = 0; i < max_dims; i++) {
+          printf("%zu ", max_item_sizes[i]);
+        }
+        printf("\n");
+        free(max_item_sizes);
+      }
+      printf("    global mem (bytes):    %llu\n", (unsigned long long)global_mem);
+      printf("    max single alloc:      %llu\n", (unsigned long long)max_alloc);
+      printf("    local mem (bytes):     %llu\n", (unsigned long long)local_mem);
+      printf("    local mem type:        %s\n",
+             local_mem_type == CL_LOCAL ? "dedicated (CL_LOCAL)" :
+             local_mem_type == CL_GLOBAL ? "emulated (CL_GLOBAL)" : "unknown");
+      printf("\n");
+    }
+    free(devices);
+  }
+  free(platforms);
+  return 0;
+}
+
+capture_this
+
+echo "checking OS ..."
+# setting OS specific flags for tests ...
+# case matches aren't analogous to test / [ ... ], check docs before adding any
+# pattern matching...
+case "${op_sys}" in
+  Darwin)
+    # mac config stuff here
+    echo "  detected Darwin, setting OS specific flags:"
+    # when invoking this variable later
+    # it stays unquoted because of the space
+    opencl_link_flags="-framework OpenCL"
+    echo "    '${opencl_link_flags}'"
+    ;;
+  Linux)
+    # linux config stuff here
+    echo "  detected a Linux distribution, setting OS specific flags:"
+    opencl_link_flags="-lOpenCL"
+    echo "    '${opencl_link_flags}'"
+    ;;
+  *)
+    echo "  unsupported/untested OS detected:" >&2
+    echo "    '${op_sys}'"
+    echo "    please contact maintainer"
+    exit 1
+    ;;
+esac
+echo " "
+
+echo "checking for OpenCL framework"
+# test openCL capabilities
+# calls to '-l' need to occur AFTER calls to '-L'
+# order here:
+# '-I' then '-L' then '-l'
+
+arg_string=""
+for compilation_arg in ${opencl_headers} \
+  ${opencl_shared_objects} \
+  ${opencl_link_flags} \
+  ${opencl_direct_pass_flags};
+do
+  if [ -n "${compilation_arg}" ]; then
+    # echo "detected arg = ${compilation_arg}"
+    arg_string="${arg_string}${compilation_arg} "
+    # echo "new string = ${arg_string}"
+  fi
+done
+
+# build as a string with spaces
+compilation_call="${current_cc} ${arg_string}${opencl_test} -o ${opencl_exec}"
+printf "testing OpenCL compilation via tempfiles with:\n  %s\n" "${compilation_call}"
+
+# execute without quotes so the shell evaluates spaces correctly...
+# drop error redirect just in case ...
+${compilation_call} 2>/dev/null
+compilation_result=$?
+
+# quoting my current compiler invocation worked at one point, but broke after
+# changing some environment variables, so i need to double check what the
+# built in defaults are ...
+# ${current_cc} "${opencl_test}" \
+#   ${opencl_headers} \
+#   ${opencl_shared_objects} \
+#   ${opencl_link_flags} \
+#   ${opencl_direct_pass_flags} \
+#   -o "${opencl_exec}" 2>/dev/null
+# compilation_result=$?
+
+# hypothetically this just needs to compile without complaint to greenlight
+# installation
+
+# if the exit condition of compilation is zero, then compilation was a success
+if [ ${compilation_result} -eq 0 ]; then
+  echo "OpenCL test script compiled without complaint."
+  "${opencl_exec}"
+  test_result=$?
+  if [ ${test_result} -eq 0 ]; then
+    echo "OpenCL devices discovered."
+    opencl_exists=0
+    opencl_notes=0
+  else
+    echo "OpenCL devices appear absent."
+    opencl_exists=0
+    opencl_notes=1
+    # is this machine a build only machine?
+  fi
+else
+  echo "OpenCL test script failed to compile. Please check for OpenCL framework."
+  echo "  WARNING: user supplied directories that contain spaces are not compatible with this configuration setup."
+  opencl_exists=1
+  opencl_notes=2
+fi
+echo " "
+
+OPENCL_CPPFLAGS="${opencl_headers}"
+OPENCL_LIBS="${opencl_shared_objects} ${opencl_link_flags} ${opencl_direct_pass_flags}"
+OPENCL_LIBS=$(printf '%s' "${OPENCL_LIBS}" | tr -s ' ')
+printf "OpenCL 'CPPFLAGS' inferred as:\n  %s\n" "${OPENCL_CPPFLAGS}"
+printf "OpenCL associated PKG_LIBS inferred as:\n %s\n" "${OPENCL_LIBS}"
+
+# end openCL testing
+# begin Metal testing
+# nothing here should exit 1, because metal capabilities need to be optional,
+# but we need to communicate clearly which files we're adding to the Makevars
+# and where sentinel functions are calling underlying compiled functions,
+# or strategically no-op-ing 
+
+metal_test="${dir01}/metal_test.m"
+metal_exec="${dir01}/metal_test"
+
+cat > "${metal_test}" << 'capture_this'
+/* ============================================================================
+ * test for metal Framework on apple devices
+ * 
+ * obj-c implementation that can just be called immediately once it has been
+ * compiled, prints out some information about the device
+ *
+ * currently no fancy footwork required, because this should only be called
+ * on an Apple OS, where the situation should be pretty boring
+ * ========================================================================= */
+
+#import <Foundation/Foundation.h>
+#import <Metal/Metal.h>
+
+int main() {
+  // the @autoreleasepool is a tool for simplifying cleanup, if everything i
+  // create within the function needs to be released when the function ends,
+  // I just start up the @autoreleasepool right away, if things need to persist
+  // then they can't be created within the pool
+  @autoreleasepool {
+    NSArray<id<MTLDevice>> *devices = MTLCopyAllDevices();
+      
+      // its important that this happens inside the autoreleasepool, though
+      // it's still a little opaque to me as to why
+      if (devices.count == 0) {
+        printf("No Metal devices found\n");
+        return 1;
+      }
+        
+      printf("Found %lu Metal device(s)\n\n", (unsigned long)devices.count);
+        
+      for (int i = 0; i < devices.count; i++) {
+          id<MTLDevice> device = devices[i];
+          printf("Device %d: %s\n", i, [device.name UTF8String]);
+          printf("  Location: %s\n", device.location == MTLDeviceLocationBuiltIn ? "Built-in" : "External");
+          printf("  Low Power: %s\n", device.lowPower ? "Yes" : "No");
+          printf("  Headless: %s\n", device.headless ? "Yes" : "No");
+          printf("  Removable: %s\n", device.removable ? "Yes" : "No");
+          printf("  Max Threads Per Threadgroup: %lu\n", (unsigned long)device.maxThreadsPerThreadgroup.width);
+          printf("  Recommended Max Working Set Size: %.2f MB\n", 
+                 device.recommendedMaxWorkingSetSize / (1024.0 * 1024.0));
+          printf("  Threadgroup Width: %lu\n", [device maxThreadsPerThreadgroup].width);
+          printf("  Threadgroup Height: %lu\n", [device maxThreadsPerThreadgroup].height);
+          printf("  Threadgroup Depth: %lu\n", [device maxThreadsPerThreadgroup].depth);
+          printf("\n");
+      }
+  }
+  return 0;
+}
+capture_this
+
+# we only test Darwin and Linux here because if we have anything else we 
+# will have already bailed out
+case "${op_sys}" in
+  Darwin)
+    # test for metal here
+    echo "Probing Metal capabilities"
+    echo " "
+    ${current_cc} \
+      "${metal_test}" \
+      -fobjc-arc \
+      -framework Metal \
+      -framework Foundation \
+      -o "${metal_exec}" 2>/dev/null
+      compilation_result=$?
+      
+      if [ ${compilation_result} -eq 0 ]; then
+        echo "Metal test compiled without complaint."
+        "${metal_exec}"
+        test_result=$?
+        if [ "${test_result}" -eq 0 ]; then
+          metal_exists=0
+          echo "Metal devices discovered."
+          echo " "
+          # make edits to makevars.in to compile metal tooling
+        else
+          metal_exists=1
+          echo "Metal devices appear absent."
+          echo " "
+        fi
+      else
+        metal_exists=1
+        echo "Metal test did not compile"
+        echo " "
+      fi
+    ;;
+  Linux)
+    # no need to test for metal on non-darwin OS
+    metal_exists=1
+    echo "Skipping tests for Metal"
+    echo " "
+    ;;
+esac
+
+if [ ${metal_exists} -eq 0 ]; then
+  METAL_OBJECTS='$(METAL_C:.c=.o) $(METAL_M:.m=_m.o)'
+  METAL_CPPFLAGS=""
+  METAL_LIBS="-framework Metal -framework Foundation"
+  DEFINE_HAVE_METAL="#define HAVE_METAL 1"
+  printf "Metal 'CPPFLAGS' inferred as:\n  %s\n" "${METAL_CPPFLAGS}"
+  printf "Metal associated PKG_LIBS inferred as:\n %s\n" "${METAL_LIBS}"
+  echo " "
+else
+  METAL_OBJECTS=""
+  METAL_CPPFLAGS=""
+  METAL_LIBS=""
+  DEFINE_HAVE_METAL="/* HAVE_METAL not defined: Metal unavailable on this build */"
+fi
+
+cuda_exists=1
+
+# variables for our test script
+cuda_test="${dir01}/cuda_test.cu"
+cuda_exec="${dir01}/cuda_test"
+
+# use a heredoc to capture our testing script
+# << capture_this will perform shell expansion
+# << 'capture_this' will not perform shell expansion
+# preprocessor directives just need the '#' character to be the first non-whitespace character
+cat > "${cuda_test}" << 'capture_this'
+/* ============================================================================
+ * test for NVIDIA CUDA devices
+ * return 0 if 1 or more devices are found
+ * return 1 if no devices are found
+ *
+ * requires the CUDA toolkit to be installed, specifically nvcc and the
+ * cuda_runtime.h header - typically found under /usr/local/cuda on Linux
+ * ========================================================================= */
+
+#include <cuda_runtime.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+int main(void) {
+    int num_devices = 0;
+    cudaError_t err = cudaGetDeviceCount(&num_devices);
+
+    if (err != cudaSuccess || num_devices == 0) {
+        printf("No CUDA devices found\n");
+        return 1;
+    }
+
+    printf("Found %d CUDA device(s)\n\n", num_devices);
+
+    for (int d = 0; d < num_devices; d++) {
+        struct cudaDeviceProp props;
+        cudaGetDeviceProperties(&props, d);
+        printf("Device %d: %s\n", d, props.name);
+        printf("  Compute Capability: %d.%d\n", props.major, props.minor);
+        printf("  Multiprocessors: %d\n", props.multiProcessorCount);
+        printf("  Global Memory: %.2f MB\n", props.totalGlobalMem / (1024.0 * 1024.0));
+        printf("  Max Threads Per Block: %d\n", props.maxThreadsPerBlock);
+        printf("  Warp Size: %d\n", props.warpSize);
+        printf("\n");
+    }
+    return 0;
+}
+capture_this
+
+# minimal .c (not .cu) test, compiled with the SAME compiler and flags
+# Makevars will actually use -- proves the derived paths work for the
+# compiler that matters, not just for nvcc
+cc_test="${dir01}/cuda_cc_test.c"
+cc_exec="${dir01}/cuda_cc_test"
+
+cat > "${cc_test}" << 'capture_this'
+#include <cuda_runtime.h>
+#include <cuda.h>
+int main(void) {
+  int n = 0;
+  cudaGetDeviceCount(&n);
+  return 0;
+}
+capture_this
+
+if [ -d "${detect_cuda_libs}" ] && [ -d "${detect_cuda_stubs}" ] && [ -d "${detect_cuda_include}" ]; then
+  # for now, we can only set cuda_exists to zero inside here
+  if [ -d "${alt_compiler}" ]; then
+    printf "an alternative compiler for CUDA has been specified:\n"
+    printf "  %s\n" ${alt_compiler}
+    cuda_cc=${alt_compiler}
+  else
+    cuda_cc=${current_cc}
+  fi
+  command -v nvcc > /dev/null 2>&1
+  nvcc_present=$?
+  if [ ${nvcc_present} -eq 0 ]; then
+    nvcc "${cuda_test}" \
+      ${alt_compiler:+--compiler-bindir "${alt_compiler}"} \
+      -I"${detect_cuda_include}" \
+      -L"${detect_cuda_libs}" \
+      -o "${cuda_exec}" 2>"${dir01}/cuda_compile_err"
+    compilation_result=$?
+    
+    "${current_cc}" ${current_cflags} ${current_cppflags} \
+      -I"${detect_cuda_include}" \
+      "${cc_test}" -o "${cc_exec}" \
+      -L"${detect_cuda_libs}" -lcudart \
+      -L"${detect_cuda_stubs}" -lcuda \
+      2>"${dir01}/cuda_cc_err"
+    cuda_cc_result=$?
+      
+    if [ ${cuda_cc_result} -eq 0 ] && [ ${compilation_result} -eq 0 ]; then
+      cuda_exists=0
+      "${cuda_exec}"
+      test_result=$?
+      if [ ${test_result} -ne 0 ]; then
+        printf "CUDA compilations were successful, but no devices were discovered\n"
+        printf "CUDA capabilities will be compiled, but devices will be required\n"
+        printf "for actual code dispatch\n"
+      fi
+    else
+      cuda_exists=1
+      printf "CUDA compilation tests did not succeed, the following must be true:\n"
+      printf "  nvcc must be in R's PATH\n"
+      printf "  ARDEA_CUDA_LIBS/STUBS/INCLUDE must be pointed to working CUDA dirs\n"
+    fi
+      
+  else
+    printf "nvcc was not detected, ending CUDA tests\n"
+    printf "nvcc must be in R's PATH to pass build checks\n"
+  fi
+fi
+
+
+
+if [ ${cuda_exists} -eq 0 ]; then
+  DEFINE_HAVE_CUDA="#define HAVE_CUDA 1"
+  printf "CUDA flags ...\n"
+else
+  DEFINE_HAVE_CUDA="/* HAVE_CUDA not defined: CUDA unavailable on this build */"
+  printf "CUDA capabilities not detected\n"
+fi
+
+sed -e "s|@OPENCL_CPPFLAGS@|${OPENCL_CPPFLAGS}|" \
+  -e "s|@OPENCL_LIBS@|${OPENCL_LIBS}|" \
+  -e "s|@OBJECTS_METAL@|${METAL_OBJECTS}|" \
+  -e "s|@METAL_CPPFLAGS@|${METAL_CPPFLAGS}|" \
+  -e "s|@METAL_LIBS@|${METAL_LIBS}|" \
+  src/Makevars.in > src/Makevars
+
+config_placeholder="${dir01}/config.h.in"
+
+cat > "${config_placeholder}" << 'capture_this'
+/* src/config.h.in
+ * Template for a generated header describing which optional GPU backends
+ * were detected at configure time.
+ */
+
+#ifndef ARDEA_CONFIG_H
+#define ARDEA_CONFIG_H
+
+/* Metal support: defined to 1 if Metal was detected and its objects were
+ * compiled, left undefined otherwise. Code that references Metal-only
+ * types, functions, or CALL_DEF entries must be wrapped in
+ * #ifdef HAVE_METAL ... #endif */
+@DEFINE_HAVE_METAL@
+
+/* Placeholder for the same pattern once CUDA detection lands */
+@DEFINE_HAVE_CUDA@
+
+#endif /* ARDEA_CONFIG_H */
+capture_this
+
+sed -e "s|@DEFINE_HAVE_METAL@|${DEFINE_HAVE_METAL}|" \
+  -e "s|@DEFINE_HAVE_CUDA@|${DEFINE_HAVE_CUDA}|" \
+  "${config_placeholder}" > src/config.h
+

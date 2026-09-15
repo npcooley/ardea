@@ -1,0 +1,417 @@
+/* ============================================================================
+ * ardea.h
+ *
+ * Public interface for ardea C functions.
+ * author: nicholas cooley
+ * maintainer: nicholas cooley
+ * 
+ * currently under construction, so naming convention are loose
+ * 
+ * rough naming convention prototypes:
+ * C-side:
+ * <framework>_exposed_device_count:
+ *  return an integer value of framework compliant devices
+ * <framework>_framework_available_devices
+ *  return a list of framework compliant devices with properties
+ * <framework>_program_from_source
+ *  for given framework, read in a file and convert it to a program with 1
+ *  or more kernel functions
+ * <framework>_kernels_from_program
+ *  extract kernel pointers from a program for context construction
+ * R-side:
+ * to be added ...
+ * ========================================================================= */
+
+/* ----------------------------------------------------------------------------
+ * start header guard 
+ * shouty case is the convention here
+ * ------------------------------------------------------------------------- */
+#ifndef ARDEA_H
+#define ARDEA_H
+
+#include <Rinternals.h>
+/* ----------------------------------------------------------------------------
+ * homebrew opencl carries both a cl.h and opencl.h header file with an
+ * OpenCL directory symlinked to the CL dir, so the apple check is ... fine
+ * but homebrew's opencl.h and cl.h headers aren't equivalent, so there's
+ * more going on here than i currently understand
+ * AND
+ * even though homebrew's opencl headers look like they *should* work,
+ * they fail to find the device anyway, so
+ * ¯\_(ツ)_/¯
+ * ------------------------------------------------------------------------- */
+#ifdef __APPLE__
+  #include <OpenCL/opencl.h>
+#else
+  #include <CL/cl.h>
+#endif
+#include <R_ext/Visibility.h>
+#include <stdint.h>
+#include <stddef.h>
+/* -- our optional capability sentinels ------------------------------------ */
+#include "config.h"
+
+/* ============================================================================
+ * shared external-pointer tag symbols
+ * created once via Rf_install() in R_init_ardea() at package load time.
+ * every framework file validates external pointers against these same
+ * symbols, rather than each file re-interning its own copy.
+ * ========================================================================= */
+// extern SEXP device_id_tag;
+extern SEXP opencl_device_id;
+// extern SEXP platform_id_tag;
+extern SEXP opencl_platform_id;
+// extern SEXP context_tag;
+extern SEXP opencl_context;
+// extern SEXP program_tag;
+extern SEXP opencl_program;
+// extern SEXP kernel_tag;
+extern SEXP opencl_kernel;
+
+/* ============================================================================
+ * package structs
+ * ========================================================================= */
+
+/* ----------------------------------------------------------------------------
+ * it is reasonably defensive to re-query the work group size and dimensions
+ * when we're invoking simple runner calls and might be the correct-ish
+ * strategy generally.
+ * looking forward, being able to cache them in a context object so that they
+ * can be recalled many times over is also reasonable, so for now we split
+ * the difference, set the struct up for future capabilities, but maintain
+ * a query function that supervises these inputs for the simple runner
+ * ------------------------------------------------------------------------- */
+typedef struct {
+  cl_context context;
+  cl_command_queue queue;
+  cl_device_id device;
+  /* --------------------------------------------------------------------------
+   * currently reserved for future caching optimizations
+   * ----------------------------------------------------------------------- */
+  size_t max_work_group_size;
+  cl_uint max_work_item_dimensions;
+  size_t max_work_item_sizes[3];
+} OpenCLContext;
+
+typedef enum {
+  OPENCL_TYPE_FLOAT = 1,
+  OPENCL_TYPE_DOUBLE,
+  OPENCL_TYPE_CHAR,
+  OPENCL_TYPE_SHORT,
+  OPENCL_TYPE_INT,
+  OPENCL_TYPE_LONG,
+  OPENCL_TYPE_UCHAR,
+  OPENCL_TYPE_USHORT,
+  OPENCL_TYPE_UINT,
+  OPENCL_TYPE_ULONG
+} OpenCLType;
+
+/* ============================================================================
+ * utils.c
+ * ========================================================================= */
+
+void *get_checked_external_ptr(SEXP ptr,
+                               SEXP expected_tag,
+                               const char *type_label);
+void set_externalptr_class(SEXP ptr,
+                           const char *specific_class);
+SEXP metal_sentinel(void);
+SEXP cuda_sentinel(void);
+
+/* ============================================================================
+ * opencl/buffers.c
+ * ========================================================================= */
+void *marshal_r_vector(SEXP vec, OpenCLType type, size_t *out_bytes);
+SEXP unmarshal_to_r_vector(void *buf, OpenCLType type, R_xlen_t n);
+
+/* ============================================================================
+ * opencl/contexts.c
+ * ========================================================================= */
+void opencl_context_finalizer(SEXP ptr);
+SEXP opencl_context_from_device(SEXP device_ptr,
+                                SEXP platform_ptr);
+
+/* ============================================================================
+ * opencl/devices.c
+ * ========================================================================= */
+int opencl_device_count(void);
+int query_device_strings(cl_device_id device,
+                         cl_device_info param,
+                         size_t buf_size,
+                         char *buf,
+                         const char *param_label);
+int query_device_units(cl_device_id device,
+                       cl_device_info param,
+                       size_t param_size,
+                       void *out,
+                       const char *param_label);
+SEXP opencl_exposed_device_count(void);
+SEXP opencl_available_devices(void);
+
+/* ============================================================================
+ * opencl/handles.c
+ * ========================================================================= */
+void opencl_program_finalizer(SEXP ptr);
+void opencl_kernel_finalizer(SEXP ptr);
+SEXP opencl_program_from_source(SEXP cl_file,
+                                SEXP context_ptr,
+                                SEXP build_options);
+SEXP opencl_kernels_from_program(SEXP program_ptr,
+                                 SEXP kernel_names);
+
+/* ============================================================================
+ * opencl/runners.c
+ * ========================================================================= */
+SEXP opencl_simple_runner(SEXP context_ptr,
+                          SEXP kernel_ptr,
+                          SEXP arg_types,
+                          SEXP arg_list,
+                          SEXP work_dims,
+                          SEXP local_dims,
+                          SEXP target_local_size);
+
+/* ============================================================================
+ * opencl/utils.c
+ * ========================================================================= */
+SEXP opencl_probe_type_support(SEXP context_ptr,
+                               SEXP type_name);
+void opencl_default_local_dims(cl_device_id device,
+                               size_t target,
+                               int active_dims,
+                               size_t local[3]);
+void release_runner_buffers(cl_mem *buffers,
+                            int total_args);
+OpenCLType opencl_parse_type(const char *s);
+size_t opencl_type_size(OpenCLType t);
+int device_supports_fp64(cl_device_id device);
+int device_supports_fp16(cl_device_id device);
+
+#ifdef HAVE_METAL
+
+/* ============================================================================
+ * shared external-pointer tag symbols
+ * created once via Rf_install() in R_init_ardea() at package load time.
+ * every framework file validates external pointers against these same
+ * symbols, rather than each file re-interning its own copy.
+ * ========================================================================= */
+
+extern SEXP metal_device;
+extern SEXP metal_context;
+extern SEXP metal_queue;
+extern SEXP metal_library;
+extern SEXP metal_pipeline;
+extern SEXP metal_buffer;
+
+/* ============================================================================
+ * types, constants, and their helpers
+ * ========================================================================= */
+
+// type definitions, these can appear in various 
+typedef enum {
+  // METAL_TYPE_HALF = 0,      // "half" - 16-bit float
+  METAL_TYPE_FLOAT = 1,     // "single" - 32-bit float
+  METAL_TYPE_DOUBLE = 2,    // "double" - 64-bit float
+  METAL_TYPE_INT8 = 3,      // "byte" - 8-bit signed int
+  METAL_TYPE_INT16 = 4,     // "short" - 16-bit signed int
+  METAL_TYPE_INT = 5,       // "integer" - 32-bit signed int
+  METAL_TYPE_INT64 = 6,     // "long" - 64-bit signed int
+  METAL_TYPE_UINT8 = 7,     // "ubyte" - 8-bit unsigned int
+  METAL_TYPE_UINT16 = 8,    // "ushort" - 16-bit unsigned int
+  METAL_TYPE_UINT = 9,      // "unsigned" - 32-bit unsigned int
+  METAL_TYPE_UINT64 = 10    // "ulong" - 64-bit unsigned int
+} MetalType;
+
+// metal storage modes
+typedef enum {
+  METAL_STORAGE_SHARED = 0,   // unified CPU/GPU memory
+  METAL_STORAGE_MANAGED = 1,  // managed memory (synced)
+  METAL_STORAGE_PRIVATE = 2   // GPU-only memory
+} MetalStorageMode;
+
+// container for contexts, just pointers for the queue and the device, these
+// get passed around together
+typedef struct {
+  void* device;
+  void* queue;
+} MetalContext;
+
+/* ----------------------------------------------------------------------------
+ * with metal we compile kernel functions *for devices* as opposed to opencl
+ * where we compile kernel functions *agnostic of devices*
+ * 
+ * using a slot to identity check the device is a lightweight choice
+ * ------------------------------------------------------------------------- */
+typedef struct {
+  void* pipeline;
+  size_t max_threads_per_threadgroup;
+  uint64_t device_registry_id;
+} MetalKernel;
+
+/* -- metal/devices.c ------------------------------------------------------ */
+SEXP metal_available_devices(void);
+SEXP c_metal_get_all_devices(void);
+SEXP c_metal_devices_default(void);
+SEXP c_metal_device_information(SEXP device_ptr);
+SEXP metal_available_devices(void);
+
+/* -- metal/devices.m ------------------------------------------------------ */
+// general device interrogation
+void* objc_metal_devices_default(void);
+void** objc_metal_get_all_devices(size_t* count);
+// general device information
+const char* metal_device_name(void* device);
+uint64_t metal_device_registry_id(void* device);
+int metal_device_has_unified_memory(void* device);
+int metal_device_is_low_power(void* device);
+int metal_device_is_headless(void* device);
+int metal_device_is_removable(void* device);
+// memory limits
+uint64_t metal_device_recommended_max_working_set_size(void* device);
+uint64_t metal_device_max_buffer_length(void* device);
+uint64_t metal_device_current_allocated_size(void* device);
+// threading limits
+void metal_device_max_threads_per_threadgroup(void* device,
+                                              size_t* width,
+                                              size_t* height,
+                                              size_t* depth);
+size_t metal_device_max_threadgroup_memory_length(void* device);
+// performance monitoring
+void metal_device_sample_timestamps(void* device,
+                                    uint64_t* cpu_timestamp,
+                                    uint64_t* gpu_timestamp);
+int metal_device_supports_counter_sampling(void* device,
+                                           int sampling_point);
+// physical slot information
+int metal_device_location(void* device);
+uint64_t metal_device_location_number(void* device);
+uint64_t metal_device_peer_group_id(void* device);
+uint32_t metal_device_peer_index(void* device);
+uint32_t metal_device_peer_count(void* device);
+
+/* -- metal/handles.c ---------------------------------------------------------
+ * powers the R-side functions:
+ * metal_make_context()
+ * metal_make_program()
+ * metal_make_kernelptr()
+ * ------------------------------------------------------------------------- */
+SEXP metal_context_from_device(SEXP device_ptr);
+SEXP metal_program_from_source(SEXP metal_file,
+                               SEXP context_ptr,
+                               SEXP fast_math,
+                               SEXP language_version);
+SEXP metal_program_from_metallib(SEXP metallib_file,
+                                 SEXP context_ptr);
+SEXP metal_kernels_from_program(SEXP program_ptr,
+                                SEXP context_ptr,
+                                SEXP kernel_names);
+
+/* -- metal/handles.m ------------------------------------------------------ */
+void* objc_metal_create_queue(void* device);
+void* objc_metal_library_from_source(void* device,
+                                     const char* source,
+                                     int fast_math,
+                                     const char* language_version,
+                                     char** error_msg);
+void* objc_metal_library_from_metallib(void* device,
+                                       const char* path,
+                                       char** error_msg);
+void* objc_metal_function_from_library(void* library,
+                                       const char* name,
+                                       char** error_msg);
+void* objc_metal_create_pipeline(void* device,
+                                 void* function,
+                                 char** error_msg);
+size_t metal_pipeline_max_threads(void* pipeline);
+
+/* -- metal/buffers.c -------------------------------------------------------
+ * R vector <-> Metal buffer conversion. unlike opencl/buffers.c (only
+ * double/long currently wired up), this covers MetalType's full set --
+ * ported from ACFmetal's already-working implementation, so there was
+ * nothing to gain by artificially narrowing it to match OpenCL's current
+ * subset. NA handling was NOT present in the ACFmetal source this was
+ * ported from and has been added here (see metal/buffers.c's header
+ * comment for why that mattered).
+ * ------------------------------------------------------------------------- */
+void metal_convert_r_numeric_to_buffer(const double* r_data,
+                                       void* metal_buffer,
+                                       size_t length,
+                                       MetalType type);
+void metal_convert_r_int_to_buffer(const int* r_data,
+                                   void* metal_buffer,
+                                   size_t length,
+                                   MetalType type);
+void metal_convert_buffer_to_r(const void* metal_buffer,
+                               double* r_data,
+                               size_t length,
+                               MetalType type);
+
+/* -- metal/buffers.m ------------------------------------------------------ */
+void* metal_create_buffer(void* device,
+                          size_t length,
+                          int storage_mode);
+void* metal_buffer_contents(void* buffer);
+size_t metal_buffer_length(void* buffer);
+
+/* -- metal/runners.c ---------------------------------------------------------
+ * powers the R-side function: (to be wired into simple_wrapper())
+ * metal_simple_runner()
+ * ------------------------------------------------------------------------- */
+SEXP metal_simple_runner(SEXP context_ptr,
+                         SEXP kernel_ptr,
+                         SEXP arg_types,
+                         SEXP arg_list,
+                         SEXP work_dims,
+                         SEXP threadgroup_dims,
+                         SEXP threads_per_threadgroup);
+
+/* -- metal/runners.m ---------------------------------------------------------
+ * command buffer lifecycle: create -> encode (in metal_encode_and_commit) ->
+ * commit -> wait -> check status/error -> read results -> release.
+ * ------------------------------------------------------------------------- */
+void* objc_metal_command_buffer_create(void* queue);
+void objc_metal_command_buffer_commit(void* command_buffer);
+void objc_metal_command_buffer_wait(void* command_buffer);
+int objc_metal_command_buffer_status(void* command_buffer);
+const char* objc_metal_command_buffer_error_string(void* command_buffer);
+void* metal_encode_and_commit(void* queue,
+                              void* pipeline,
+                              void* output_buffer,
+                              size_t num_threadgroups[3],
+                              size_t threads_per_threadgroup[3],
+                              void** arg_buffers,
+                              void** arg_scalars,
+                              size_t* arg_scalar_sizes,
+                              int* is_scalar,
+                              int num_args);
+
+/* -- metal/utils.c -------------------------------------------------------- */
+void objc_inclusive_finalizer(SEXP ptr);
+void metal_device_finalizer(SEXP device_exp);
+void metal_context_finalizer(SEXP context_exp);
+void metal_command_queue_finalizer(SEXP queue_exp);
+void metal_library_finalizer(SEXP library_exp);
+void metal_pipeline_finalizer(SEXP pipeline_exp);
+void metal_buffer_finalizer(SEXP buffer_exp);
+MetalType metal_parse_type(const char* type_str);
+size_t metal_get_element_size(MetalType type);
+const char* metal_type_name(MetalType type);
+void metal_default_threadgroup_dims(size_t target,
+                                    int active_dims,
+                                    size_t threadgroup[3]);
+
+/* -- metal/utils.m -------------------------------------------------------- */
+void objc_release_obj(void* obj);
+void objc_retain_obj(void* obj);
+void metal_release_buffer(void* buffer);
+void metal_release_command_buffer(void* command_buffer);
+void metal_release_command_queue(void* command_queue);
+void metal_release_device(void* device);
+void metal_release_library(void* library);
+void metal_release_function(void* function);
+void metal_release_pipeline(void* pipeline);
+
+/* -- end optional metal capabilties --------------------------------------- */
+#endif
+
+/* -- end header guard ----------------------------------------------------- */
+#endif

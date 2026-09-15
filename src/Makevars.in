@@ -1,0 +1,79 @@
+# Makevars.in for ardea
+
+# configure sets with 'sed':
+#   OPENCL_CPPFLAGS == OpenCL include/define flags (e.g. -I..., -DCL_TARGET_OPENCL_VERSION=120)
+#   OPENCL_LIBS ====== OpenCL link flags (-L... -lOpenCL on Linux, -framework OpenCL on macOS)
+#   METAL_CPPFLAGS === Metal include/define flags, or empty string if Metal unavailable
+#   METAL_LIBS ======= Metal link flags (-framework Metal ...), or empty string if unavailable
+#   OBJECTS_METAL ==== "$(METAL_C:.c=.o) $(METAL_M:.m=_m.o)" if Metal available, else empty
+
+PKG_CPPFLAGS = -I.
+OPENCL_CPPFLAGS = @OPENCL_CPPFLAGS@
+METAL_CPPFLAGS = @METAL_CPPFLAGS@
+
+PKG_LIBS = @OPENCL_LIBS@ @METAL_LIBS@
+
+# basic utils, and R init 
+BASE_SOURCES = utils.c R_init_ardea.c
+
+# C source files, for now this is pretty boring
+# order by:
+# depth (lowest first),
+# case (lowercase first),
+# alphabetical 
+# source files added through sed handles should be grouped together and match that
+# formatting
+OPENCL_C = opencl/buffers.c \
+	opencl/contexts.c \
+	opencl/devices.c \
+	opencl/handles.c \
+	opencl/runners.c \
+	opencl/utils.c
+	
+# Metal C source files
+METAL_C = metal/buffers.c \
+	metal/devices.c \
+	metal/handles.c \
+	metal/runners.c \
+	metal/utils.c
+
+# Metal Objective-C source files
+METAL_M = metal/buffers.m \
+	metal/devices.m \
+	metal/handles.m \
+	metal/runners.m \
+	metal/utils.m
+
+# compile opencl and base utils by default
+OBJECTS_BASE = $(BASE_SOURCES:.c=.o)
+OBJECTS_OPENCL = $(OPENCL_C:.c=.o)
+# if we were compiling metal by default, it would look like this:
+# OBJECTS_METAL = $(METAL_C:.c=.o) $(METAL_M:.m=_m.o)
+
+# we are not compiling by default, so our configure script fills this in if
+# we detect it:
+OBJECTS_METAL = @OBJECTS_METAL@
+OBJECTS = $(OBJECTS_BASE) $(OBJECTS_OPENCL) $(OBJECTS_METAL)
+
+# --- Compile rules --------------------------------------------------------
+
+opencl/%.o: opencl/%.c
+	$(CC) $(ALL_CPPFLAGS) $(OPENCL_CPPFLAGS) $(ALL_CFLAGS) -c $< -o $@
+
+metal/%.o: metal/%.c
+	$(CC) $(ALL_CPPFLAGS) $(METAL_CPPFLAGS) $(ALL_CFLAGS) -c $< -o $@
+
+metal/%_m.o: metal/%.m
+	$(CC) $(ALL_CPPFLAGS) $(METAL_CPPFLAGS) $(ALL_CFLAGS) -fobjc-arc -c $< -o $@
+
+# our prototype objective C rule from ACFmetal, we now need to be slightly 
+# more precise
+# %_m.o: %.m
+# 	$(CC) $(ALL_CPPFLAGS) $(ALL_CFLAGS) -fobjc-arc -c $< -o $@
+
+# define a clean function
+# 
+# clean:
+# 	rm -f $(OBJECTS) && rm -rf *.mod
+# 	@echo "intermediate compilation objects removed..."
+
