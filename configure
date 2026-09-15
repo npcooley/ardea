@@ -1,6 +1,11 @@
 #!/bin/sh
 # configure script for mac / linux
 
+# script organization:
+# section 1: overhead variables
+# section 2: tempfiles and heredocs
+# section 3: capability detection
+
 # testing before package is ready
 if [ -z "${R_HOME:-""}" ]; then
   R_HOME=$(R RHOME)
@@ -33,6 +38,12 @@ current_cppflags=$("${R_HOME}/bin/R" CMD config CPPFLAGS)
 # most of this is really just practice and preparation for CUDA variable
 # handling, and we *shouldn't* really need it here, though providing it for 
 # linux users is the right choice
+
+# homebrew opencl carries with it both an
+# OpenCL/opencl.h
+# AND
+# CL/cl.h
+# they are not the same, so i'm not sure what the consequences of the difference are ...
 
 # OpenCL variables we should respect if the user has set them:
 
@@ -80,11 +91,10 @@ else
   fi
 fi
 
-# we can't just infer everything from nvcc because we won't know if its 
-# present
-# we can try and infer things from CUDA_HOME, but there are a lot of options
-# and i don't want to deal with it yet
-# so for now we are just going to trigger cuda detection from ARDEA env vars
+# CUDA variables we *require* for compilation and capability selection
+# inference from CUDA_HOME or nvcc's location in the PATH is possible, but
+# this script is already complicated ... for now, we're stringent here
+# to save ourselves headaches
 detect_cuda_libs="${ARDEA_CUDA_LIBS:-""}"
 detect_cuda_stubs="${ARDEA_CUDA_STUBS:-""}"
 detect_cuda_include="${ARDEA_CUDA_INCLUDE:-""}"
@@ -93,19 +103,22 @@ alt_compiler="${ARDEA_ALT_COMPILER:-""}"
 
 op_sys="$(uname -s)"
 
+# build our tempdir and trap it
 dir01=$(mktemp -d)
 trap 'rm -rf "${dir01}" && echo "tempfiles removed\n"' EXIT
 
 opencl_test="${dir01}/opencl_test.c"
 opencl_exec="${dir01}/opencl_test"
+metal_test="${dir01}/metal_test.m"
+metal_exec="${dir01}/metal_test"
+cuda_test="${dir01}/cuda_test.cu"
+cuda_exec="${dir01}/cuda_test"
+# minimal .c (not .cu) test -- we need to test the flags for both
+# nvcc and our target compiler
+cc_test="${dir01}/cuda_cc_test.c"
+cc_exec="${dir01}/cuda_cc_test"
 
-# homebrew opencl carries with it both an
-# OpenCL/opencl.h
-# AND
-# CL/cl.h
-# they are not the same, so i'm not sure what the consequences of the difference are ...
-
-# use a heredoc to capture our testing scripts
+# we use several heredocs to capture our testing scripts
 # << capture_this will perform shell expansion
 # << 'capture_this' will not perform shell expansion
 # preprocessor directives just need the '#' character to be the first non-whitespace character
@@ -159,6 +172,16 @@ static int query_device_info(cl_device_id device,
  * print out device information
  * ------------------------------------------------------------------------- */
 int main(void) {
+  /* --------------------------------------------------------------------------
+   * track the lowest CL_DEVICE_VERSION seen across every device on
+   * every platform, so configure can target the weakest device found
+   * rather than the strongest (see the ARDEA_OPENCL_MIN_VERSION line
+   * emitted at the end of this program). -1 means "no device with a
+   * parseable version has been seen yet". 
+   * ----------------------------------------------------------------------- */
+  int min_cl_major = -1;
+  int min_cl_minor = -1;
+
   cl_uint num_platforms = 0;
   if (clGetPlatformIDs(0, NULL, &num_platforms) != CL_SUCCESS ||
       num_platforms == 0) {
@@ -214,11 +237,33 @@ int main(void) {
                         sizeof(name),
                         name,
                         "CL_DEVICE_NAME");
-      query_device_info(devices[d],
+      int version_query_err = query_device_info(devices[d],
                         CL_DEVICE_VERSION,
                         sizeof(version),
                         version,
                         "CL_DEVICE_VERSION");
+      if (version_query_err == 0) {
+        /* -- CL_DEVICE_VERSION is spec-mandated to read
+         * "OpenCL <major>.<minor> <platform-specific info>", so this
+         * is parsing a guaranteed format, not screen-scraping a
+         * vendor-arbitrary string. sscanf's return value is checked
+         * so a malformed/unexpected string is skipped (and reported)
+         * rather than silently treated as version 0.0. */
+        int device_cl_major = 0;
+        int device_cl_minor = 0;
+        if (sscanf(version, "OpenCL %d.%d", &device_cl_major, &device_cl_minor) == 2) {
+          if (min_cl_major < 0 ||
+              device_cl_major < min_cl_major ||
+              (device_cl_major == min_cl_major && device_cl_minor < min_cl_minor)) {
+            min_cl_major = device_cl_major;
+            min_cl_minor = device_cl_minor;
+          }
+        } else {
+          fprintf(stderr,
+                  "  WARNING: could not parse CL_DEVICE_VERSION string '%s'\n",
+                  version);
+        }
+      }
       query_device_info(devices[d],
                         CL_DEVICE_VENDOR,
                         sizeof(device_vendor),
@@ -316,6 +361,125 @@ int main(void) {
     free(devices);
   }
   free(platforms);
+
+  /* -- emit a single, fixed-format line the calling shell script can
+   * grep out unambiguously, rather than parsing the human-readable
+   * "device version:" lines printed above (which are free to change
+   * their spacing/wording without that being a compatibility break).
+   * encoding follows the Khronos convention of major*100 + minor*10,
+   * e.g. 1.2 -> 120, 2.1 -> 210, 3.0 -> 300. printed as UNKNOWN when
+   * no device offered a parseable CL_DEVICE_VERSION, so the caller can
+   * tell "detected nothing" apart from "detected 0.0". */
+  if (min_cl_major >= 0) {
+    printf("ARDEA_OPENCL_MIN_VERSION=%d\n", (min_cl_major * 100) + (min_cl_minor * 10));
+  } else {
+    printf("ARDEA_OPENCL_MIN_VERSION=UNKNOWN\n");
+  }
+
+  return 0;
+}
+
+capture_this
+
+cat > "${metal_test}" << 'capture_this'
+/* ============================================================================
+ * test for metal Framework on apple devices
+ * 
+ * obj-c implementation that can just be called immediately once it has been
+ * compiled, prints out some information about the device
+ *
+ * currently no fancy footwork required, because this should only be called
+ * on an Apple OS, where the situation should be pretty boring
+ * ========================================================================= */
+
+#import <Foundation/Foundation.h>
+#import <Metal/Metal.h>
+
+int main() {
+  // the @autoreleasepool is a tool for simplifying cleanup, if everything i
+  // create within the function needs to be released when the function ends,
+  // I just start up the @autoreleasepool right away, if things need to persist
+  // then they can't be created within the pool
+  @autoreleasepool {
+    NSArray<id<MTLDevice>> *devices = MTLCopyAllDevices();
+      
+      // its important that this happens inside the autoreleasepool, though
+      // it's still a little opaque to me as to why
+      if (devices.count == 0) {
+        printf("No Metal devices found\n");
+        return 1;
+      }
+        
+      printf("Found %lu Metal device(s)\n\n", (unsigned long)devices.count);
+        
+      for (int i = 0; i < devices.count; i++) {
+          id<MTLDevice> device = devices[i];
+          printf("Device %d: %s\n", i, [device.name UTF8String]);
+          printf("  Location: %s\n", device.location == MTLDeviceLocationBuiltIn ? "Built-in" : "External");
+          printf("  Low Power: %s\n", device.lowPower ? "Yes" : "No");
+          printf("  Headless: %s\n", device.headless ? "Yes" : "No");
+          printf("  Removable: %s\n", device.removable ? "Yes" : "No");
+          printf("  Max Threads Per Threadgroup: %lu\n", (unsigned long)device.maxThreadsPerThreadgroup.width);
+          printf("  Recommended Max Working Set Size: %.2f MB\n", 
+                 device.recommendedMaxWorkingSetSize / (1024.0 * 1024.0));
+          printf("  Threadgroup Width: %lu\n", [device maxThreadsPerThreadgroup].width);
+          printf("  Threadgroup Height: %lu\n", [device maxThreadsPerThreadgroup].height);
+          printf("  Threadgroup Depth: %lu\n", [device maxThreadsPerThreadgroup].depth);
+          printf("\n");
+      }
+  }
+  return 0;
+}
+
+capture_this
+
+cat > "${cuda_test}" << 'capture_this'
+/* ============================================================================
+ * test for NVIDIA CUDA devices
+ * return 0 if 1 or more devices are found
+ * return 1 if no devices are found
+ *
+ * requires the CUDA toolkit to be installed, specifically nvcc and the
+ * cuda_runtime.h header - typically found under /usr/local/cuda on Linux
+ * ========================================================================= */
+
+#include <cuda_runtime.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+int main(void) {
+    int num_devices = 0;
+    cudaError_t err = cudaGetDeviceCount(&num_devices);
+
+    if (err != cudaSuccess || num_devices == 0) {
+        printf("No CUDA devices found\n");
+        return 1;
+    }
+
+    printf("Found %d CUDA device(s)\n\n", num_devices);
+
+    for (int d = 0; d < num_devices; d++) {
+        struct cudaDeviceProp props;
+        cudaGetDeviceProperties(&props, d);
+        printf("Device %d: %s\n", d, props.name);
+        printf("  Compute Capability: %d.%d\n", props.major, props.minor);
+        printf("  Multiprocessors: %d\n", props.multiProcessorCount);
+        printf("  Global Memory: %.2f MB\n", props.totalGlobalMem / (1024.0 * 1024.0));
+        printf("  Max Threads Per Block: %d\n", props.maxThreadsPerBlock);
+        printf("  Warp Size: %d\n", props.warpSize);
+        printf("\n");
+    }
+    return 0;
+}
+
+capture_this
+
+cat > "${cc_test}" << 'capture_this'
+#include <cuda_runtime.h>
+#include <cuda.h>
+int main(void) {
+  int n = 0;
+  cudaGetDeviceCount(&n);
   return 0;
 }
 
@@ -392,10 +556,21 @@ compilation_result=$?
 # installation
 
 # if the exit condition of compilation is zero, then compilation was a success
+# detected_cl_target stays empty unless the probe below reports a valid,
+# all-digit minimum device version; this is the value CL_TARGET_OPENCL_VERSION
+# gets set to, so it starts empty (rather than a hardcoded guess) and is
+# only populated by a validated probe output further down.
+detected_cl_target=""
+
 if [ ${compilation_result} -eq 0 ]; then
   echo "OpenCL test script compiled without complaint."
-  "${opencl_exec}"
+  # capture stdout so we can both show it to the user (as before) and grep
+  # the machine-readable ARDEA_OPENCL_MIN_VERSION line out of it; $? right
+  # after a command-substitution assignment still reflects that command's
+  # exit status, so test_result below is unaffected by the capture.
+  opencl_probe_output=$("${opencl_exec}")
   test_result=$?
+  printf '%s\n' "${opencl_probe_output}"
   if [ ${test_result} -eq 0 ]; then
     echo "OpenCL devices discovered."
     opencl_exists=0
@@ -403,8 +578,30 @@ if [ ${compilation_result} -eq 0 ]; then
   else
     echo "OpenCL devices appear absent."
     opencl_exists=0
+    # i can use this note for something if i'm clever
+    # but lets not try and be too clever for our own good ...
     opencl_notes=1
     # is this machine a build only machine?
+  fi
+
+  # pull the sentinel line out of the probe's output, if present
+  detected_cl_target=$(printf '%s\n' "${opencl_probe_output}" | \
+    grep '^ARDEA_OPENCL_MIN_VERSION=' | \
+    sed 's/^ARDEA_OPENCL_MIN_VERSION=//')
+
+  # defensive: only trust a strictly-numeric result (this also rejects
+  # "UNKNOWN", a missing line, and anything else unexpected) before it
+  # ever gets anywhere near a compiler command line
+  case "${detected_cl_target}" in
+    ''|*[!0-9]*)
+      detected_cl_target=""
+      ;;
+  esac
+
+  if [ -n "${detected_cl_target}" ]; then
+    printf "detected OpenCL device(s) report a minimum supported version corresponding to CL_TARGET_OPENCL_VERSION=%s\n" "${detected_cl_target}"
+  else
+    printf "could not determine a device-reported OpenCL version; CL_TARGET_OPENCL_VERSION will fall back to the source-level default (120)\n"
   fi
 else
   echo "OpenCL test script failed to compile. Please check for OpenCL framework."
@@ -414,7 +611,17 @@ else
 fi
 echo " "
 
-OPENCL_CPPFLAGS="${opencl_headers}"
+opencl_target_define=""
+if [ -n "${detected_cl_target}" ]; then
+  opencl_target_define="-DCL_TARGET_OPENCL_VERSION=${detected_cl_target}"
+fi
+
+OPENCL_CPPFLAGS="${opencl_headers} ${opencl_target_define}"
+# collapse repeated spaces (e.g. when opencl_headers is empty) and trim
+# leading/trailing whitespace so an empty detection doesn't leave a stray
+# space at the front/back of the flag string
+OPENCL_CPPFLAGS=$(printf '%s' "${OPENCL_CPPFLAGS}" | tr -s ' ')
+OPENCL_CPPFLAGS=$(printf '%s' "${OPENCL_CPPFLAGS}" | sed -e 's/^ *//' -e 's/ *$//')
 OPENCL_LIBS="${opencl_shared_objects} ${opencl_link_flags} ${opencl_direct_pass_flags}"
 OPENCL_LIBS=$(printf '%s' "${OPENCL_LIBS}" | tr -s ' ')
 printf "OpenCL 'CPPFLAGS' inferred as:\n  %s\n" "${OPENCL_CPPFLAGS}"
@@ -426,60 +633,6 @@ printf "OpenCL associated PKG_LIBS inferred as:\n %s\n" "${OPENCL_LIBS}"
 # but we need to communicate clearly which files we're adding to the Makevars
 # and where sentinel functions are calling underlying compiled functions,
 # or strategically no-op-ing 
-
-metal_test="${dir01}/metal_test.m"
-metal_exec="${dir01}/metal_test"
-
-cat > "${metal_test}" << 'capture_this'
-/* ============================================================================
- * test for metal Framework on apple devices
- * 
- * obj-c implementation that can just be called immediately once it has been
- * compiled, prints out some information about the device
- *
- * currently no fancy footwork required, because this should only be called
- * on an Apple OS, where the situation should be pretty boring
- * ========================================================================= */
-
-#import <Foundation/Foundation.h>
-#import <Metal/Metal.h>
-
-int main() {
-  // the @autoreleasepool is a tool for simplifying cleanup, if everything i
-  // create within the function needs to be released when the function ends,
-  // I just start up the @autoreleasepool right away, if things need to persist
-  // then they can't be created within the pool
-  @autoreleasepool {
-    NSArray<id<MTLDevice>> *devices = MTLCopyAllDevices();
-      
-      // its important that this happens inside the autoreleasepool, though
-      // it's still a little opaque to me as to why
-      if (devices.count == 0) {
-        printf("No Metal devices found\n");
-        return 1;
-      }
-        
-      printf("Found %lu Metal device(s)\n\n", (unsigned long)devices.count);
-        
-      for (int i = 0; i < devices.count; i++) {
-          id<MTLDevice> device = devices[i];
-          printf("Device %d: %s\n", i, [device.name UTF8String]);
-          printf("  Location: %s\n", device.location == MTLDeviceLocationBuiltIn ? "Built-in" : "External");
-          printf("  Low Power: %s\n", device.lowPower ? "Yes" : "No");
-          printf("  Headless: %s\n", device.headless ? "Yes" : "No");
-          printf("  Removable: %s\n", device.removable ? "Yes" : "No");
-          printf("  Max Threads Per Threadgroup: %lu\n", (unsigned long)device.maxThreadsPerThreadgroup.width);
-          printf("  Recommended Max Working Set Size: %.2f MB\n", 
-                 device.recommendedMaxWorkingSetSize / (1024.0 * 1024.0));
-          printf("  Threadgroup Width: %lu\n", [device maxThreadsPerThreadgroup].width);
-          printf("  Threadgroup Height: %lu\n", [device maxThreadsPerThreadgroup].height);
-          printf("  Threadgroup Depth: %lu\n", [device maxThreadsPerThreadgroup].depth);
-          printf("\n");
-      }
-  }
-  return 0;
-}
-capture_this
 
 # we only test Darwin and Linux here because if we have anything else we 
 # will have already bailed out
@@ -539,71 +692,8 @@ else
   DEFINE_HAVE_METAL="/* HAVE_METAL not defined: Metal unavailable on this build */"
 fi
 
+# set missing capabilities as the default
 cuda_exists=1
-
-# variables for our test script
-cuda_test="${dir01}/cuda_test.cu"
-cuda_exec="${dir01}/cuda_test"
-
-# use a heredoc to capture our testing script
-# << capture_this will perform shell expansion
-# << 'capture_this' will not perform shell expansion
-# preprocessor directives just need the '#' character to be the first non-whitespace character
-cat > "${cuda_test}" << 'capture_this'
-/* ============================================================================
- * test for NVIDIA CUDA devices
- * return 0 if 1 or more devices are found
- * return 1 if no devices are found
- *
- * requires the CUDA toolkit to be installed, specifically nvcc and the
- * cuda_runtime.h header - typically found under /usr/local/cuda on Linux
- * ========================================================================= */
-
-#include <cuda_runtime.h>
-#include <stdio.h>
-#include <stdlib.h>
-
-int main(void) {
-    int num_devices = 0;
-    cudaError_t err = cudaGetDeviceCount(&num_devices);
-
-    if (err != cudaSuccess || num_devices == 0) {
-        printf("No CUDA devices found\n");
-        return 1;
-    }
-
-    printf("Found %d CUDA device(s)\n\n", num_devices);
-
-    for (int d = 0; d < num_devices; d++) {
-        struct cudaDeviceProp props;
-        cudaGetDeviceProperties(&props, d);
-        printf("Device %d: %s\n", d, props.name);
-        printf("  Compute Capability: %d.%d\n", props.major, props.minor);
-        printf("  Multiprocessors: %d\n", props.multiProcessorCount);
-        printf("  Global Memory: %.2f MB\n", props.totalGlobalMem / (1024.0 * 1024.0));
-        printf("  Max Threads Per Block: %d\n", props.maxThreadsPerBlock);
-        printf("  Warp Size: %d\n", props.warpSize);
-        printf("\n");
-    }
-    return 0;
-}
-capture_this
-
-# minimal .c (not .cu) test, compiled with the SAME compiler and flags
-# Makevars will actually use -- proves the derived paths work for the
-# compiler that matters, not just for nvcc
-cc_test="${dir01}/cuda_cc_test.c"
-cc_exec="${dir01}/cuda_cc_test"
-
-cat > "${cc_test}" << 'capture_this'
-#include <cuda_runtime.h>
-#include <cuda.h>
-int main(void) {
-  int n = 0;
-  cudaGetDeviceCount(&n);
-  return 0;
-}
-capture_this
 
 if [ -d "${detect_cuda_libs}" ] && [ -d "${detect_cuda_stubs}" ] && [ -d "${detect_cuda_include}" ]; then
   # for now, we can only set cuda_exists to zero inside here
@@ -637,6 +727,7 @@ if [ -d "${detect_cuda_libs}" ] && [ -d "${detect_cuda_stubs}" ] && [ -d "${dete
       "${cuda_exec}"
       test_result=$?
       if [ ${test_result} -ne 0 ]; then
+        cuda_exists=0
         printf "CUDA compilations were successful, but no devices were discovered\n"
         printf "CUDA capabilities will be compiled, but devices will be required\n"
         printf "for actual code dispatch\n"
