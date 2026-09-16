@@ -240,7 +240,8 @@ A simple wrapper function is supplied with `ardea`, though it is mostly a thin w
 
 ```{r, execute_dispatch}
 # our builtin optimized CPU implementation
-system.time(res01 <- var01 %*% var02) 
+print("Builtin implementation:")
+system.time(res01 <- var01 %*% var02)
 if (opencl_is_available()) {
   print("OpenCL implementation:")
   print(system.time(res02 <- simple_wrapper(framework = "opencl",

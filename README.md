@@ -1,4 +1,4 @@
-ardea 0.0.2
+ardea 0.0.3
 ================
 Nicholas Cooley
 2026-09-16
@@ -335,11 +335,17 @@ judgements.
 
 ``` r
 # our builtin optimized CPU implementation
-system.time(res01 <- var01 %*% var02) 
+print("Builtin implementation:")
+```
+
+    ## [1] "Builtin implementation:"
+
+``` r
+system.time(res01 <- var01 %*% var02)
 ```
 
     ##    user  system elapsed 
-    ##    0.03    0.00    0.03
+    ##   0.031   0.001   0.032
 
 ``` r
 if (opencl_is_available()) {
@@ -362,7 +368,7 @@ if (opencl_is_available()) {
 
     ## [1] "OpenCL implementation:"
     ##    user  system elapsed 
-    ##   0.001   0.002   0.016
+    ##   0.001   0.002   0.019
 
 ![](README_files/figure-gfm/execute_dispatch-1.png)<!-- -->
 

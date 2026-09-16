@@ -6,6 +6,7 @@
 ^\.Rproj\.user$
 ^\.git$
 ^\.github$
+^TODO.md
 
 # DS_Store in any subdirectory
 \.DS_Store$
