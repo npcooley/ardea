@@ -20,9 +20,11 @@
 # ^src/Makevars.in$
 
 # files that are the children of dot in files 
-# or generated from heredocs by configure
+# generated from heredocs by configure
+# or otherwise built by configure
 ^src/Makevars$
 ^src/config.h
+^R/sysdata.rda
 
 # files in the root that are important for the package
 # but are not built by R CMD build
