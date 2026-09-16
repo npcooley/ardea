@@ -6,6 +6,7 @@
 - build a `metal_exposed_device_count` to sit alongside `opencl_exposed_device_count` and `cuda_exposed_device_count`
 - build companion `<framework>_devices_present` functions to work alongside `<framework>_is_available` functions that ask that at least one device is present
 - users should not be surprised that they can compile with a framework present, but need a present device to successfully dispatch
+- configure.win / configure.ucrt construction for windows accessibility
 
 ## DOCUMENTATION
 
