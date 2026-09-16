@@ -627,6 +627,12 @@ OPENCL_LIBS=$(printf '%s' "${OPENCL_LIBS}" | tr -s ' ')
 printf "OpenCL 'CPPFLAGS' inferred as:\n  %s\n" "${OPENCL_CPPFLAGS}"
 printf "OpenCL associated PKG_LIBS inferred as:\n %s\n" "${OPENCL_LIBS}"
 
+if [ ${opencl_exists} -eq 0 ]; then
+  DEFINE_HAVE_OPENCL="#define HAVE_OPENCL 1"
+else
+  DEFINE_HAVE_OPENCL="/* HAVE_OPENCL not defined: OpenCL unavailable on this build */"
+fi
+
 # end openCL testing
 # begin Metal testing
 # nothing here should exit 1, because metal capabilities need to be optional,

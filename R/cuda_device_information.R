@@ -16,14 +16,18 @@ cuda_device_information <- function() {
   if (cuda_is_available()) {
     res <- .Call("cuda_available_devices",
                  PACKAGE = "ardea")
-    for (d1 in seq_along(res)) {
-      res[[d1]]$framework <- "cuda"
-      res[[d1]]$type <- "GPU"
-      res[[d1]]$max_compute_units <- res[[d1]]$multiprocessor_count
-      class(res[[d1]]) <- c("alternative_device",
-                            "list")
+    if (length(res) > 0) {
+      for (d1 in seq_along(res)) {
+        res[[d1]]$framework <- "cuda"
+        res[[d1]]$type <- "GPU"
+        res[[d1]]$max_compute_units <- res[[d1]]$multiprocessor_count
+        class(res[[d1]]) <- c("alternative_device",
+                              "list")
+      }
+      return(res)
+    } else {
+      return(NULL)
     }
-    return(res)
   } else {
     return(NULL)
   }
