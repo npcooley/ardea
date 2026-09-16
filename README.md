@@ -160,9 +160,9 @@ __kernel void opencl_mm_naive(__global float* output,
     }
 }
 '
-tmp01 <- tempfile(fileext = ".cl")
+tmp_cl <- tempfile(fileext = ".cl")
 writeLines(text = opencl_mm_naive,
-           con = tmp01)
+           con = tmp_cl)
 
 cuda_mm_naive <- '
 extern "C" __global__ void cuda_mm_naive(float* output,
@@ -184,10 +184,10 @@ extern "C" __global__ void cuda_mm_naive(float* output,
     }
 }
 '
-tmp02 <- tempfile(fileext = ".cu")
-tmp03 <- tempfile(fileext = ".ptx")
+tmp_cu <- tempfile(fileext = ".cu")
+tmp_ptx <- tempfile(fileext = ".ptx")
 writeLines(text = cuda_mm_naive,
-           con = tmp02)
+           con = tmp_cu)
 
 metal_mm_naive <- '
 kernel void metal_mm_naive(device float* output [[buffer(0)]],
@@ -210,10 +210,10 @@ kernel void metal_mm_naive(device float* output [[buffer(0)]],
     }
 }
 '
-tmp04 <- tempfile(fileext = ".metal")
-tmp05 <- tempfile(fileext = ".metallib")
+tmp_metal <- tempfile(fileext = ".metal")
+tmp_metallib <- tempfile(fileext = ".metallib")
 writeLines(text = metal_mm_naive,
-           con = tmp04)
+           con = tmp_metal)
 ```
 
 Matrix multiplication doesn’t need a lot of setup when using the builtin
@@ -225,13 +225,13 @@ that those helpers would perform.
 ``` r
 # generic inputs, regardless of framework
 var00 <- vector(mode = "numeric",
-               length = 250000)
+                length = 250000)
 var01 <- matrix(rnorm(250000),
-               nrow = 500,
-               ncol = 500)
+                nrow = 500,
+                ncol = 500)
 var02 <- matrix(rnorm(250000),
-               nrow = 500,
-               ncol = 500)
+                nrow = 500,
+                ncol = 500)
 dim01 <- nrow(var01)
 dim02 <- ncol(var01)
 # dim03 <- nrow(var02)
@@ -264,12 +264,12 @@ opencl_arg_types <- c("float",
                       "long",
                       "float",
                       "float")
-metal_arg_types = c("float",
-                    "uint",
-                    "uint",
-                    "uint",
-                    "float",
-                    "float")
+metal_arg_types <- c("float",
+                     "uint",
+                     "uint",
+                     "uint",
+                     "float",
+                     "float")
 cuda_arg_types <- c("float",
                     "long",
                     "long",
@@ -292,7 +292,7 @@ if (opencl_is_available()) {
   print("OpenCL is available on this system!")
   cl_dvcs <- opencl_device_information()
   cl_ctx <- opencl_make_context(device = cl_dvcs[[1]])
-  cl_program <- opencl_make_program(cl_file = tmp01,
+  cl_program <- opencl_make_program(cl_file = tmp_cl,
                                     context = cl_ctx)
   cl_knl <- opencl_make_kernelptr(program = cl_program,
                                   kernel_names = "opencl_mm_naive")
@@ -306,9 +306,9 @@ if (cuda_is_available()) {
   print("CUDA is available on this system!")
   cu_dvcs <- cuda_device_information()
   cu_ctx <- cuda_make_context(device = cu_dvcs[[1]])
-  cu_program <- cuda_make_program(cuda_file = tmp02,
+  cu_program <- cuda_make_program(cuda_file = tmp_cu,
                                   context = cu_ctx,
-                                  ptx_file = tmp03)
+                                  ptx_file = tmp_ptx)
   cu_knl <- cuda_make_kernelptr(program = cu_program,
                                 context = cu_ctx,
                                 kernel_names = "cuda_mm_naive")
@@ -317,8 +317,8 @@ if (metal_is_available()) {
   print("Metal is available on this system!")
   mtl_dvcs <- metal_device_information()
   mtl_ctx <- metal_make_context(device = mtl_dvcs[[1]])
-  mtl_program <- metal_make_program(metal_file = tmp04,
-                                    metallib_file = tmp05,
+  mtl_program <- metal_make_program(metal_file = tmp_metal,
+                                    metallib_file = tmp_metallib,
                                     context = mtl_ctx)
   mtl_knl <- metal_make_kernelptr(program = mtl_program,
                                   context = mtl_ctx,
@@ -345,7 +345,7 @@ system.time(res01 <- var01 %*% var02)
 ```
 
     ##    user  system elapsed 
-    ##   0.031   0.001   0.032
+    ##   0.031   0.001   0.031
 
 ``` r
 if (opencl_is_available()) {
@@ -368,7 +368,7 @@ if (opencl_is_available()) {
 
     ## [1] "OpenCL implementation:"
     ##    user  system elapsed 
-    ##   0.001   0.002   0.019
+    ##   0.002   0.002   0.017
 
 ![](README_files/figure-gfm/execute_dispatch-1.png)<!-- -->
 
@@ -409,7 +409,7 @@ if (metal_is_available()) {
 
     ## [1] "Metal implementation:"
     ##    user  system elapsed 
-    ##   0.001   0.000   0.006
+    ##   0.001   0.001   0.006
 
 ![](README_files/figure-gfm/execute_dispatch-2.png)<!-- -->
 
