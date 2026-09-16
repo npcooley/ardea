@@ -59,6 +59,14 @@ print.alternative_device <- function(x, ...) {
     cat(sprintf("  max threads per threadgroup:                   %s\n",
                 paste(x$max_threads_per_threadgroup,
                       collapse = " x ")))
+  } else if (x$framework == "cuda") {
+    cat(sprintf("  total global memory:  %s\n",
+                .format_bytes(x$total_global_mem_bytes)))
+    cat(sprintf("  max threads/block:    %.0f\n",
+                x$max_threads_per_block))
+    cat(sprintf("  compute capability:   %s.%s\n",
+                x$compute_capability_major,
+                x$compute_capability_minor))
   }
   
   invisible(x)

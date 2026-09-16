@@ -98,8 +98,13 @@ SEXP cuda_simple_runner(SEXP context_ptr,
                                               cuda_context,
                                               "cuda_context");
   /* -- fix 1: the context-activation discipline, first thing, no
-   * exceptions -- everything below implicitly targets whatever device
-   * this call sets current */
+   * exceptions -- everything below implicitly targets whatever context
+   * this call sets current. cuda_ensure_driver_init() must run before
+   * cuda_activate_context(), since activation is now a Driver API call
+   * (cuCtxSetCurrent) -- harmless/idempotent here in the normal workflow
+   * (cuda_make_program()/cuda_make_kernelptr() already called it), but
+   * this function shouldn't depend on that having happened elsewhere */
+  cuda_ensure_driver_init();
   cuda_activate_context(ctx);
   
   CudaKernel *kern = get_checked_external_ptr(kernel_ptr,

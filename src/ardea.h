@@ -441,19 +441,28 @@ typedef enum {
 
 /* ----------------------------------------------------------------------------
  * NOT an object the way OpenCLContext/MetalContext are -- CUDA identifies
- * "which device is active" via cudaSetDevice(device_index), which sets
- * ambient, per-calling-thread state, not a handle you pass around. this
- * struct is a thin proxy for that state, not a container that owns it the
- * way the other two frameworks' context structs do. every function that
- * touches a CudaContext must call cuda_activate_context() on it FIRST,
- * as a hard rule -- see cuda/utils.c's cuda_activate_context() for why
- * this can't be enforced by the type system and has to be a discipline
- * instead.
+ * "which device is active" via a current CONTEXT on the calling thread,
+ * not a handle you pass around the way cl_context/MTLDevice are. this
+ * struct holds an EXPLICITLY retained primary_context (via
+ * cuDevicePrimaryCtxRetain(), released via cuDevicePrimaryCtxRelease() in
+ * the finalizer) rather than relying on whatever ambient context
+ * cudaSetDevice() happens to leave current -- Runtime-API-only context
+ * management (just calling cudaSetDevice() with nothing explicitly
+ * retained) does not guarantee the underlying primary context survives
+ * across separate .Call() boundaries the way a held reference does; a
+ * Driver API call (cuModuleLoad, cuLaunchKernel) made after that context
+ * has been torn down fails with CUDA_ERROR_CONTEXT_IS_DESTROYED. every
+ * function that touches a CudaContext must call cuda_activate_context()
+ * on it FIRST, as a hard rule -- see cuda/utils.c's cuda_activate_context()
+ * for why this can't be enforced by the type system and has to be a
+ * discipline instead.
  * ------------------------------------------------------------------------- */
 typedef struct {
   int device_index;
   /* -- cudaStream_t, or NULL for the default stream ----------------------- */
   void *stream;
+  /* -- CUcontext, explicitly retained -- see above ------------------------ */
+  void *primary_context;
 } CudaContext;
 
 /* ----------------------------------------------------------------------------

@@ -25,9 +25,19 @@
  * it came from an 'alternative_device' object on the R side, but nothing
  * stops that object from being stale (built in an earlier session, a
  * device unplugged/reconfigured since).
+ *
+ * the primary context is EXPLICITLY retained here via
+ * cuDevicePrimaryCtxRetain() -- not just activated via cudaSetDevice()
+ * and left to whatever ambient lifetime the runtime happens to give it.
+ * that explicit retain, held for as long as this R object exists and
+ * released only in cuda_context_finalizer(), is what guarantees the
+ * context is still valid whenever a later .Call() (cuda_make_program(),
+ * cuda_make_kernelptr(), cuda_simple_runner()) activates it again.
  * ========================================================================= */
 SEXP cuda_context_from_device(SEXP device_index_sexp,
                               SEXP use_default_stream_sexp) {
+  cuda_ensure_driver_init();
+  
   if (TYPEOF(device_index_sexp) != INTSXP || LENGTH(device_index_sexp) != 1) {
     Rf_error("'device_index' must be a single integer value");
   }
@@ -44,21 +54,39 @@ SEXP cuda_context_from_device(SEXP device_index_sexp,
              "currently detected", device_index, device_count);
   }
   
-  cudaError_t set_err = cudaSetDevice(device_index);
-  if (set_err != cudaSuccess) {
-    Rf_error("failed to set CUDA device %d as current: %s",
-             device_index, cudaGetErrorString(set_err));
+  CUdevice cu_device;
+  CUresult dev_res = cuDeviceGet(&cu_device, device_index);
+  if (dev_res != CUDA_SUCCESS) {
+    Rf_error("failed to get CUDA device handle for index %d: %s",
+             device_index, cuda_driver_error_string((int)dev_res));
+  }
+  
+  CUcontext primary_context;
+  CUresult retain_res = cuDevicePrimaryCtxRetain(&primary_context, cu_device);
+  if (retain_res != CUDA_SUCCESS) {
+    Rf_error("failed to retain primary context for device %d: %s",
+             device_index, cuda_driver_error_string((int)retain_res));
+  }
+  
+  CUresult activate_res = cuCtxSetCurrent(primary_context);
+  if (activate_res != CUDA_SUCCESS) {
+    cuDevicePrimaryCtxRelease(cu_device);
+    Rf_error("failed to activate primary context for device %d: %s",
+             device_index, cuda_driver_error_string((int)activate_res));
   }
   
   CudaContext *ctx = calloc(1, sizeof(*ctx));
   if (ctx == NULL) {
+    cuDevicePrimaryCtxRelease(cu_device);
     Rf_error("failed to allocate CudaContext");
   }
   ctx->device_index = device_index;
   ctx->stream = NULL;
+  ctx->primary_context = (void *)primary_context;
   
   if (TYPEOF(use_default_stream_sexp) != LGLSXP ||
       LENGTH(use_default_stream_sexp) != 1) {
+    cuDevicePrimaryCtxRelease(cu_device);
     free(ctx);
     Rf_error("'use_default_stream' must be a single logical value");
   }
@@ -67,6 +95,7 @@ SEXP cuda_context_from_device(SEXP device_index_sexp,
     cudaStream_t stream;
     cudaError_t stream_err = cudaStreamCreate(&stream);
     if (stream_err != cudaSuccess) {
+      cuDevicePrimaryCtxRelease(cu_device);
       free(ctx);
       Rf_error("failed to create CUDA stream: %s",
                cudaGetErrorString(stream_err));
@@ -99,8 +128,8 @@ SEXP cuda_program_from_ptx(SEXP ptx_file,
   CudaContext *ctx = get_checked_external_ptr(context_ptr,
                                               cuda_context,
                                               "cuda_context");
-  cuda_activate_context(ctx);
   cuda_ensure_driver_init();
+  cuda_activate_context(ctx);
   
   if (TYPEOF(ptx_file) != STRSXP || LENGTH(ptx_file) != 1) {
     Rf_error("'ptx_file' must be a character vector of length 1");
@@ -147,8 +176,8 @@ SEXP cuda_kernels_from_module(SEXP program_ptr,
   CudaContext *ctx = get_checked_external_ptr(context_ptr,
                                               cuda_context,
                                               "cuda_context");
-  cuda_activate_context(ctx);
   cuda_ensure_driver_init();
+  cuda_activate_context(ctx);
   
   if (TYPEOF(kernel_names) != STRSXP || LENGTH(kernel_names) < 1) {
     Rf_error("'kernel_names' must be a character vector of length 1 or greater");

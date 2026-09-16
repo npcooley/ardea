@@ -39,28 +39,46 @@ void cuda_ensure_driver_init(void) {
  * the context-activation discipline
  *
  * CUDA has no object that "is" a context the way cl_context/MTLDevice do.
- * cudaSetDevice(index) sets which GPU is current for the CALLING THREAD;
+ * cuCtxSetCurrent() sets which context is active for the CALLING THREAD;
  * every subsequent call -- runtime or driver API -- implicitly targets
- * whatever was last set current. CudaContext is a proxy for that ambient
- * state, not a container that owns it.
+ * whatever was last set current (the Runtime and Driver APIs stay in
+ * sync automatically as long as the current context is a device's
+ * PRIMARY context, which is exactly what CudaContext.primary_context
+ * holds). CudaContext is a proxy for that ambient state, not a container
+ * that owns it the way OpenCLContext/MetalContext do.
+ *
+ * this activates via the DRIVER API (cuCtxSetCurrent) rather than
+ * cudaSetDevice() -- deliberately: cudaSetDevice() only ever activates a
+ * device's primary context ambiently, with nothing explicitly retained,
+ * which is what let that context get torn down out from under a still-
+ * live CudaContext in the first place. cuCtxSetCurrent() against the
+ * EXPLICITLY retained primary_context this struct holds doesn't have
+ * that gap, and Runtime API calls (cudaMalloc, cudaMemcpy, etc.) made
+ * afterward still correctly target the same device, since the Runtime
+ * API recognizes a primary context as "that device is current" the same
+ * way cudaSetDevice() would have set it.
  *
  * the rule this function exists to enforce: every C function that
  * receives a CudaContext* calls this as its literal first statement, no
  * exceptions. nothing in C's type system can force that -- forgetting it
- * compiles fine and just silently operates on whichever device happened
+ * compiles fine and just silently operates on whichever context happened
  * to be current from some earlier, unrelated call. the only real defense
- * available is failing loudly here if cudaSetDevice() itself reports a
+ * available is failing loudly here if cuCtxSetCurrent() itself reports a
  * problem, and consistent discipline everywhere else.
  * ========================================================================= */
 void cuda_activate_context(CudaContext *ctx) {
   if (ctx == NULL) {
     Rf_error("internal error: NULL CudaContext passed to cuda_activate_context()");
   }
-  cudaError_t err = cudaSetDevice(ctx->device_index);
-  if (err != cudaSuccess) {
-    Rf_error("failed to set CUDA device %d as current: %s",
+  if (ctx->primary_context == NULL) {
+    Rf_error("internal error: CudaContext has no retained primary_context "
+             "-- was it constructed via cuda_context_from_device()?");
+  }
+  CUresult res = cuCtxSetCurrent((CUcontext)ctx->primary_context);
+  if (res != CUDA_SUCCESS) {
+    Rf_error("failed to activate CUDA context for device %d: %s",
              ctx->device_index,
-             cudaGetErrorString(err));
+             cuda_driver_error_string((int)res));
   }
 }
 
@@ -83,18 +101,27 @@ const char *cuda_driver_error_string(int cu_result) {
  * ========================================================================= */
 
 /* ----------------------------------------------------------------------------
- * a stream's owning device must be current before it can be destroyed --
- * NOT whatever device happens to be current when R's GC decides to run
- * this finalizer, which could easily be a different context's device if
- * more than one is open at once. this is the same activation discipline
- * as everywhere else, just applied at teardown time instead of use time.
+ * releases the EXPLICITLY retained primary context (see the CudaContext
+ * struct comment in ardea.h for why that retain exists at all), and
+ * destroys the stream if one was created. the context must be current
+ * before its stream can be destroyed -- NOT whatever context happens to
+ * be current when R's GC decides to run this finalizer, which could
+ * easily belong to a different CudaContext if more than one is open at
+ * once. this is the same activation discipline as everywhere else, just
+ * applied at teardown time instead of use time.
  * ------------------------------------------------------------------------- */
 void cuda_context_finalizer(SEXP context_exp) {
   CudaContext *ctx = (CudaContext *)R_ExternalPtrAddr(context_exp);
   if (ctx != NULL) {
-    if (ctx->stream != NULL) {
-      cudaSetDevice(ctx->device_index);
-      cudaStreamDestroy((cudaStream_t)ctx->stream);
+    if (ctx->primary_context != NULL) {
+      if (ctx->stream != NULL) {
+        cuCtxSetCurrent((CUcontext)ctx->primary_context);
+        cudaStreamDestroy((cudaStream_t)ctx->stream);
+      }
+      CUdevice cu_device;
+      if (cuDeviceGet(&cu_device, ctx->device_index) == CUDA_SUCCESS) {
+        cuDevicePrimaryCtxRelease(cu_device);
+      }
     }
     free(ctx);
     R_ClearExternalPtr(context_exp);
