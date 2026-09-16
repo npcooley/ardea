@@ -339,21 +339,21 @@ system.time(res01 <- var01 %*% var02)
 ```
 
     ##    user  system elapsed 
-    ##   0.031   0.000   0.032
+    ##    0.03    0.00    0.03
 
 ``` r
 if (opencl_is_available()) {
   print("OpenCL implementation:")
-  system.time(res02 <- simple_wrapper(framework = "opencl",
-                                      context_ptr = cl_ctx,
-                                      kernel_ptr = cl_knl$opencl_mm_naive,
-                                      arg_types = opencl_arg_types,
-                                      arg_list = arg_list,
-                                      problem_dims = as.integer(c(dim01,
-                                                                  dim04,
-                                                                  1L)),
-                                      group_dims = NULL,
-                                      workers_per = NULL))
+  print(system.time(res02 <- simple_wrapper(framework = "opencl",
+                                            context_ptr = cl_ctx,
+                                            kernel_ptr = cl_knl$opencl_mm_naive,
+                                            arg_types = opencl_arg_types,
+                                            arg_list = arg_list,
+                                            problem_dims = as.integer(c(dim01,
+                                                                        dim04,
+                                                                        1L)),
+                                            group_dims = NULL,
+                                            workers_per = NULL)))
   plot(as.vector(res01),
        res02,
        pch = 46)
@@ -361,38 +361,40 @@ if (opencl_is_available()) {
 ```
 
     ## [1] "OpenCL implementation:"
+    ##    user  system elapsed 
+    ##   0.001   0.002   0.016
 
 ![](README_files/figure-gfm/execute_dispatch-1.png)<!-- -->
 
 ``` r
 if (cuda_is_available()) {
   print("CUDA implementation:")
-  system.time(res03 <- simple_wrapper(framework = "cuda",
-                                      context_ptr = cu_ctx,
-                                      kernel_ptr = cu_knl$cuda_mm_naive,
-                                      arg_types = cuda_arg_types,
-                                      arg_list = arg_list,
-                                      problem_dims = as.integer(c(dim01,
-                                                                  dim04,
-                                                                  1L)),
-                                      group_dims = NULL,
-                                      workers_per = NULL))
+  print(system.time(res03 <- simple_wrapper(framework = "cuda",
+                                            context_ptr = cu_ctx,
+                                            kernel_ptr = cu_knl$cuda_mm_naive,
+                                            arg_types = cuda_arg_types,
+                                            arg_list = arg_list,
+                                            problem_dims = as.integer(c(dim01,
+                                                                        dim04,
+                                                                        1L)),
+                                            group_dims = NULL,
+                                            workers_per = NULL)))
   plot(as.vector(res01),
        res03,
        pch = 46)
 }
 if (metal_is_available()) {
   print("Metal implementation:")
-  system.time(res03 <- simple_wrapper(framework = "metal",
-                                      context_ptr = mtl_ctx,
-                                      kernel_ptr = mtl_knl$metal_mm_naive,
-                                      arg_types = metal_arg_types,
-                                      arg_list = arg_list,
-                                      problem_dims = as.integer(c(dim01,
-                                                                  dim04,
-                                                                  1L)),
-                                      group_dims = NULL,
-                                      workers_per = NULL))
+  print(system.time(res03 <- simple_wrapper(framework = "metal",
+                                            context_ptr = mtl_ctx,
+                                            kernel_ptr = mtl_knl$metal_mm_naive,
+                                            arg_types = metal_arg_types,
+                                            arg_list = arg_list,
+                                            problem_dims = as.integer(c(dim01,
+                                                                        dim04,
+                                                                        1L)),
+                                            group_dims = NULL,
+                                            workers_per = NULL)))
   plot(as.vector(res01),
        res03,
        pch = 46)
@@ -400,6 +402,8 @@ if (metal_is_available()) {
 ```
 
     ## [1] "Metal implementation:"
+    ##    user  system elapsed 
+    ##   0.001   0.000   0.006
 
 ![](README_files/figure-gfm/execute_dispatch-2.png)<!-- -->
 
