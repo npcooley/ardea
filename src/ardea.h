@@ -413,5 +413,147 @@ void metal_release_pipeline(void* pipeline);
 /* -- end optional metal capabilties --------------------------------------- */
 #endif
 
+#ifdef HAVE_CUDA
+
+/* ============================================================================
+ * shared external-pointer tag symbols
+ * ========================================================================= */
+extern SEXP cuda_context;
+extern SEXP cuda_module;
+extern SEXP cuda_kernel;
+
+/* ============================================================================
+ * types, constants, and their helpers
+ * ========================================================================= */
+
+typedef enum {
+  CUDA_TYPE_FLOAT = 1,
+  CUDA_TYPE_DOUBLE = 2,
+  CUDA_TYPE_INT8 = 3,
+  CUDA_TYPE_INT16 = 4,
+  CUDA_TYPE_INT = 5,
+  CUDA_TYPE_INT64 = 6,
+  CUDA_TYPE_UINT8 = 7,
+  CUDA_TYPE_UINT16 = 8,
+  CUDA_TYPE_UINT = 9,
+  CUDA_TYPE_UINT64 = 10
+} CudaType;
+
+/* ----------------------------------------------------------------------------
+ * NOT an object the way OpenCLContext/MetalContext are -- CUDA identifies
+ * "which device is active" via cudaSetDevice(device_index), which sets
+ * ambient, per-calling-thread state, not a handle you pass around. this
+ * struct is a thin proxy for that state, not a container that owns it the
+ * way the other two frameworks' context structs do. every function that
+ * touches a CudaContext must call cuda_activate_context() on it FIRST,
+ * as a hard rule -- see cuda/utils.c's cuda_activate_context() for why
+ * this can't be enforced by the type system and has to be a discipline
+ * instead.
+ * ------------------------------------------------------------------------- */
+typedef struct {
+  int device_index;
+  /* -- cudaStream_t, or NULL for the default stream ----------------------- */
+  void *stream;
+} CudaContext;
+
+/* ----------------------------------------------------------------------------
+ * CUfunction/CUmodule have no reference counting at all -- unlike
+ * MetalKernel (which independently retains its device via ARC) or
+ * cl_kernel (refcounted by clRetainKernel/clReleaseKernel), a CUfunction
+ * is a raw handle into its owning CUmodule with no protection: unload
+ * the module and every function from it is instantly dangling. this
+ * struct therefore does NOT try to keep the module alive itself -- that
+ * job is done at the R level (see cuda_kernels_from_module() in
+ * cuda/handles.c), by anchoring the parent program SEXP as an attribute
+ * on the kernel's own externalptr, so R's garbage collector can't reclaim
+ * the module while any kernel built from it is still reachable.
+ *
+ * max_threads_per_block is snapshotted once, at kernel-creation time, via
+ * cuFuncGetAttribute(CU_FUNC_ATTRIBUTE_MAX_THREADS_PER_BLOCK) -- the
+ * direct CUDA analog of MetalKernel.max_threads_per_threadgroup, and for
+ * the same reason: a per-FUNCTION ceiling, not a per-device one, queried
+ * once rather than on every dispatch.
+ * ------------------------------------------------------------------------- */
+typedef struct {
+  /* -- CUfunction --------------------------------------------------------- */
+  void *function;
+  int max_threads_per_block;
+  int device_index;    
+ /* ---------------------------------------------------------------------------
+  * cross-check against the dispatching context,
+  * mirroring MetalKernel.device_registry_id's role 
+  * ------------------------------------------------------------------------ */
+} CudaKernel;
+
+/* -- cuda/devices.c ------------------------------------------------------- */
+int cuda_device_count(void);
+SEXP cuda_exposed_device_count(void);
+SEXP cuda_available_devices(void);
+
+/* -- cuda/handles.c ----------------------------------------------------------
+ * powers the R-side functions:
+ * cuda_make_context()
+ * cuda_make_program()
+ * cuda_make_kernelptr()
+ * ------------------------------------------------------------------------- */
+SEXP cuda_context_from_device(SEXP device_index,
+                              SEXP use_default_stream);
+SEXP cuda_program_from_ptx(SEXP ptx_file,
+                           SEXP context_ptr);
+SEXP cuda_kernels_from_module(SEXP program_ptr,
+                              SEXP context_ptr,
+                              SEXP kernel_names);
+
+/* -- cuda/buffers.c ----------------------------------------------------------
+ * host-side R vector <-> CUDA staging-buffer conversion. same shape and
+ * same NA-guarding discipline as metal/buffers.c -- see that file's header
+ * comment for why the NA/NaN checks matter. this operates on plain host
+ * memory (the intermediate staging buffer cudaMemcpy needs), not device
+ * memory directly -- unlike Metal's Shared-storage buffers, CUDA's classic
+ * allocation model needs an explicit host-side buffer before the explicit
+ * copy to device.
+ * ------------------------------------------------------------------------- */
+void cuda_convert_r_numeric_to_host(const double *r_data,
+                                    void *host_buffer,
+                                    size_t length,
+                                    CudaType type);
+void cuda_convert_r_int_to_host(const int *r_data,
+                                void *host_buffer,
+                                size_t length,
+                                CudaType type);
+void cuda_convert_host_to_r(const void *host_buffer,
+                            double *r_data,
+                            size_t length,
+                            CudaType type);
+
+/* -- cuda/runners.c ----------------------------------------------------------
+ * powers the R-side function: (wired into simple_wrapper())
+ * cuda_simple_runner()
+ * ------------------------------------------------------------------------- */
+SEXP cuda_simple_runner(SEXP context_ptr,
+                        SEXP kernel_ptr,
+                        SEXP arg_types,
+                        SEXP arg_list,
+                        SEXP work_dims,
+                        SEXP block_dims,
+                        SEXP threads_per_block);
+
+/* -- cuda/utils.c --------------------------------------------------------- */
+void cuda_ensure_driver_init(void);
+void cuda_activate_context(CudaContext *ctx);
+void cuda_context_finalizer(SEXP context_exp);
+void cuda_module_finalizer(SEXP module_exp);
+void cuda_kernel_finalizer(SEXP kernel_exp);
+CudaType cuda_parse_type(const char *type_str);
+size_t cuda_get_element_size(CudaType type);
+const char *cuda_type_name(CudaType type);
+void cuda_default_block_dims(size_t target,
+                             int active_dims,
+                             size_t block[3]);
+const char *cuda_driver_error_string(int cu_result);
+
+/* -- end optional cuda capabilities --------------------------------------- */
+#endif
+
 /* -- end header guard ----------------------------------------------------- */
 #endif

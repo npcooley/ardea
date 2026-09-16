@@ -39,6 +39,17 @@ export(metal_make_kernelptr)
 export(metal_make_program)
 export(metal_make_context)
 
+###### -- cuda functions ------------------------------------------------------
+# these must query `cuda_is_available` at the top
+
+# device query
+export(cuda_device_information)
+
+# handle management
+export(cuda_make_kernelptr)
+export(cuda_make_program)
+export(cuda_make_context)
+
 
 # class methods
 S3method(print, "device_list")

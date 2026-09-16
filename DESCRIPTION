@@ -1,7 +1,7 @@
 Package: ardea
 Type: Package
 Title: Infrastructure for interacting with GPUs
-Version: 0.0.2
+Version: 0.0.3
 Authors@R: c(
     person("Nicholas",
             "Cooley",
@@ -25,6 +25,4 @@ Encoding: UTF-8
 Author: Nicholas Cooley [aut, cre] (ORCID:
     <https://orcid.org/0000-0002-6029-304X>)
 Maintainer: Nicholas Cooley <npcooley@gmail.com>
-
-
 

@@ -24,12 +24,18 @@ SEXP opencl_program = NULL;
 SEXP opencl_kernel = NULL;
 
 #ifdef HAVE_METAL
-  SEXP metal_device = NULL;
-  SEXP metal_context = NULL;
-  SEXP metal_queue = NULL;
-  SEXP metal_library = NULL;
-  SEXP metal_pipeline = NULL;
-  SEXP metal_buffer = NULL;
+SEXP metal_device = NULL;
+SEXP metal_context = NULL;
+SEXP metal_queue = NULL;
+SEXP metal_library = NULL;
+SEXP metal_pipeline = NULL;
+SEXP metal_buffer = NULL;
+#endif
+
+#ifdef HAVE_CUDA
+SEXP cuda_context = NULL;
+SEXP cuda_module = NULL;
+SEXP cuda_kernel = NULL;
 #endif
 
 /* ============================================================================
@@ -88,6 +94,17 @@ static const R_CallMethodDef callMethods[] = {
   /* -- metal/runners.c ---------------------------------------------------- */
   CALL_DEF(metal_simple_runner, 7),
 #endif
+#ifdef HAVE_CUDA
+  /* -- cuda/devices.c ----------------------------------------------------- */
+  CALL_DEF(cuda_exposed_device_count, 0),
+  CALL_DEF(cuda_available_devices, 0),
+  /* -- cuda/handles.c ----------------------------------------------------- */
+  CALL_DEF(cuda_context_from_device, 2),
+  CALL_DEF(cuda_program_from_ptx, 2),
+  CALL_DEF(cuda_kernels_from_module, 3),
+  /* -- cuda/runners.c ----------------------------------------------------- */
+  CALL_DEF(cuda_simple_runner, 7),
+#endif
   {NULL, NULL, 0}
 };
 
@@ -129,7 +146,6 @@ void R_init_ardea(DllInfo *info) {
   R_PreserveObject(opencl_kernel);
   
 #ifdef HAVE_METAL
-  
   metal_device = Rf_install("metal_device");
   metal_context  = Rf_install("metal_context");
   metal_queue = Rf_install("metal_queue");
@@ -144,7 +160,16 @@ void R_init_ardea(DllInfo *info) {
   R_PreserveObject(metal_pipeline);
   R_PreserveObject(metal_buffer);
 #endif
+
+#ifdef HAVE_CUDA
+  cuda_context = Rf_install("cuda_context");
+  cuda_module = Rf_install("cuda_module");
+  cuda_kernel = Rf_install("cuda_kernel");
   
+  R_PreserveObject(cuda_context);
+  R_PreserveObject(cuda_module);
+  R_PreserveObject(cuda_kernel);
+#endif
   // initialize symbols, defined in a "shared.c" file
   // currently not used
   //ardea_init_symbols();

@@ -89,8 +89,10 @@
   This R function is a relatively thin wrapper for the C-level \code{opencl_available_devices}, which will return an empty list if no OpenCL compliant devices are present. That empty list is signaled to \code{NULL} in R.
 }
 \examples{
-  devices <- opencl_device_information()
-  str(devices)
+  if (opencl_is_available()) {
+    devices <- opencl_device_information()
+    str(devices)
+  }
 }
 \seealso{
   \code{\link{opencl_is_available}}

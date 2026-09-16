@@ -758,9 +758,17 @@ fi
 
 
 if [ ${cuda_exists} -eq 0 ]; then
+  CUDA_OBJECTS='$(CUDA_C:.c=.o)'
+  CUDA_CPPFLAGS="-I${detect_cuda_include}"
+  CUDA_LIBS="-L${detect_cuda_libs} -lcudart -L${detect_cuda_stubs} -lcuda -Wl,-rpath,${detect_cuda_libs}"
   DEFINE_HAVE_CUDA="#define HAVE_CUDA 1"
-  printf "CUDA flags ...\n"
+  printf "CUDA 'CPPFLAGS' inferred as:\n  %s\n" "${CUDA_CPPFLAGS}"
+  printf "CUDA associated PKG_LIBS inferred as:\n %s\n" "${CUDA_LIBS}"
+  echo " "
 else
+  CUDA_OBJECTS=""
+  CUDA_CPPFLAGS=""
+  CUDA_LIBS=""
   DEFINE_HAVE_CUDA="/* HAVE_CUDA not defined: CUDA unavailable on this build */"
   printf "CUDA capabilities not detected\n"
 fi
@@ -770,6 +778,9 @@ sed -e "s|@OPENCL_CPPFLAGS@|${OPENCL_CPPFLAGS}|" \
   -e "s|@OBJECTS_METAL@|${METAL_OBJECTS}|" \
   -e "s|@METAL_CPPFLAGS@|${METAL_CPPFLAGS}|" \
   -e "s|@METAL_LIBS@|${METAL_LIBS}|" \
+  -e "s|@OBJECTS_CUDA@|${CUDA_OBJECTS}|" \
+  -e "s|@CUDA_CPPFLAGS@|${CUDA_CPPFLAGS}|" \
+  -e "s|@CUDA_LIBS@|${CUDA_LIBS}|" \
   src/Makevars.in > src/Makevars
 
 config_placeholder="${dir01}/config.h.in"

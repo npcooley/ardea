@@ -6,12 +6,16 @@
 #   METAL_CPPFLAGS === Metal include/define flags, or empty string if Metal unavailable
 #   METAL_LIBS ======= Metal link flags (-framework Metal ...), or empty string if unavailable
 #   OBJECTS_METAL ==== "$(METAL_C:.c=.o) $(METAL_M:.m=_m.o)" if Metal available, else empty
+#   CUDA_CPPFLAGS ==== CUDA include flags (-I<CUDA_INCLUDE>), or empty if CUDA unavailable
+#   CUDA_LIBS ======== CUDA link flags (-L<CUDA_LIB> -lcudart -L<CUDA_STUBS> -lcuda), or empty
+#   OBJECTS_CUDA ===== "$(CUDA_C:.c=.o)" if CUDA available, else empty
 
 PKG_CPPFLAGS = -I.
 OPENCL_CPPFLAGS = @OPENCL_CPPFLAGS@
 METAL_CPPFLAGS = @METAL_CPPFLAGS@
+CUDA_CPPFLAGS = @CUDA_CPPFLAGS@
 
-PKG_LIBS = @OPENCL_LIBS@ @METAL_LIBS@
+PKG_LIBS = @OPENCL_LIBS@ @METAL_LIBS@ @CUDA_LIBS@
 
 # basic utils, and R init 
 BASE_SOURCES = utils.c R_init_ardea.c
@@ -44,16 +48,28 @@ METAL_M = metal/buffers.m \
 	metal/runners.m \
 	metal/utils.m
 
+# CUDA C source files
+CUDA_C = cuda/buffers.c \
+	cuda/devices.c \
+	cuda/handles.c \
+	cuda/runners.c \
+	cuda/utils.c
+
 # compile opencl and base utils by default
 OBJECTS_BASE = $(BASE_SOURCES:.c=.o)
 OBJECTS_OPENCL = $(OPENCL_C:.c=.o)
 # if we were compiling metal by default, it would look like this:
 # OBJECTS_METAL = $(METAL_C:.c=.o) $(METAL_M:.m=_m.o)
 
-# we are not compiling by default, so our configure script fills this in if
-# we detect it:
+# we when we are not compiling by default we need to detect through configure
+# configure populates these placeholders when it runs framework detection
+# routines
 OBJECTS_METAL = @OBJECTS_METAL@
-OBJECTS = $(OBJECTS_BASE) $(OBJECTS_OPENCL) $(OBJECTS_METAL)
+
+# again when we are not compiling by default we need to detect through configure
+OBJECTS_CUDA = @OBJECTS_CUDA@
+
+OBJECTS = $(OBJECTS_BASE) $(OBJECTS_OPENCL) $(OBJECTS_METAL) $(OBJECTS_CUDA)
 
 # --- Compile rules --------------------------------------------------------
 
@@ -66,10 +82,8 @@ metal/%.o: metal/%.c
 metal/%_m.o: metal/%.m
 	$(CC) $(ALL_CPPFLAGS) $(METAL_CPPFLAGS) $(ALL_CFLAGS) -fobjc-arc -c $< -o $@
 
-# our prototype objective C rule from ACFmetal, we now need to be slightly 
-# more precise
-# %_m.o: %.m
-# 	$(CC) $(ALL_CPPFLAGS) $(ALL_CFLAGS) -fobjc-arc -c $< -o $@
+cuda/%.o: cuda/%.c
+	$(CC) $(ALL_CPPFLAGS) $(CUDA_CPPFLAGS) $(ALL_CFLAGS) -c $< -o $@
 
 # define a clean function
 # 
