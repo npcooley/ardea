@@ -561,6 +561,8 @@ compilation_result=$?
 # gets set to, so it starts empty (rather than a hardcoded guess) and is
 # only populated by a validated probe output further down.
 detected_cl_target=""
+opencl_exists=1
+opencl_devices_exist=1
 
 if [ ${compilation_result} -eq 0 ]; then
   echo "OpenCL test script compiled without complaint."
@@ -574,13 +576,11 @@ if [ ${compilation_result} -eq 0 ]; then
   if [ ${test_result} -eq 0 ]; then
     echo "OpenCL devices discovered."
     opencl_exists=0
-    opencl_notes=0
+    opencl_devices_exist=0
   else
     echo "OpenCL devices appear absent."
     opencl_exists=0
-    # i can use this note for something if i'm clever
-    # but lets not try and be too clever for our own good ...
-    opencl_notes=1
+    opencl_devices_exist=1
     # is this machine a build only machine?
   fi
 
@@ -607,7 +607,7 @@ else
   echo "OpenCL test script failed to compile. Please check for OpenCL framework."
   echo "  WARNING: user supplied directories that contain spaces are not compatible with this configuration setup."
   opencl_exists=1
-  opencl_notes=2
+  opencl_devices_exist=1
 fi
 echo " "
 
@@ -634,6 +634,9 @@ printf "OpenCL associated PKG_LIBS inferred as:\n %s\n" "${OPENCL_LIBS}"
 # and where sentinel functions are calling underlying compiled functions,
 # or strategically no-op-ing 
 
+metal_exists=1
+metal_devices_exist=1
+
 # we only test Darwin and Linux here because if we have anything else we 
 # will have already bailed out
 case "${op_sys}" in
@@ -655,16 +658,19 @@ case "${op_sys}" in
         test_result=$?
         if [ "${test_result}" -eq 0 ]; then
           metal_exists=0
+          metal_devices_exist=0
           echo "Metal devices discovered."
           echo " "
           # make edits to makevars.in to compile metal tooling
         else
-          metal_exists=1
+          metal_exists=0
+          metal_devices_exist=1
           echo "Metal devices appear absent."
           echo " "
         fi
       else
         metal_exists=1
+        metal_devices_exist=1
         echo "Metal test did not compile"
         echo " "
       fi
@@ -672,6 +678,7 @@ case "${op_sys}" in
   Linux)
     # no need to test for metal on non-darwin OS
     metal_exists=1
+    metal_devices_exist=1
     echo "Skipping tests for Metal"
     echo " "
     ;;
@@ -694,6 +701,7 @@ fi
 
 # set missing capabilities as the default
 cuda_exists=1
+cuda_devices_exist=1
 
 if [ -d "${detect_cuda_libs}" ] && [ -d "${detect_cuda_stubs}" ] && [ -d "${detect_cuda_include}" ]; then
   # for now, we can only set cuda_exists to zero inside here
@@ -731,6 +739,8 @@ if [ -d "${detect_cuda_libs}" ] && [ -d "${detect_cuda_stubs}" ] && [ -d "${dete
         printf "CUDA compilations were successful, but no devices were discovered\n"
         printf "CUDA capabilities will be compiled, but devices will be required\n"
         printf "for actual code dispatch\n"
+      else
+        cuda_devices_exist=0
       fi
     else
       cuda_exists=1
@@ -788,4 +798,24 @@ capture_this
 sed -e "s|@DEFINE_HAVE_METAL@|${DEFINE_HAVE_METAL}|" \
   -e "s|@DEFINE_HAVE_CUDA@|${DEFINE_HAVE_CUDA}|" \
   "${config_placeholder}" > src/config.h
+
+# R/sysdata.rda is reserved data file that is loaded into the
+# package's internal namespace and is not exported
+"${R_HOME}/bin/Rscript" -e "
+ardea_vars <- list(cuda_include = '${detect_cuda_include}',
+                   cuda_libs = '${detect_cuda_libs}',
+                   cuda_stubs = '${detect_cuda_stubs}',
+                   opencl_libs = '${ARDEA_OPENCL_LIBS}',
+                   opencl_include = '${ARDEA_OPENCL_INCLUDE}',
+                   opencl_min_target = '${detected_cl_target}',
+                   opencl_success = as.integer('${opencl_exists}'),
+                   opencl_devices_exist = as.integer('${opencl_devices_exist}'),
+                   metal_success = as.integer('${metal_exists}'),
+                   metal_devices_exist = as.integer('${metal_devices_exist}'),
+                   cuda_success = as.integer('${cuda_exists}'),
+                   cuda_devices_exist = as.integer('${cuda_devices_exist}'))
+save(ardea_vars, file = 'R/sysdata.rda')
+"
+
+
 
