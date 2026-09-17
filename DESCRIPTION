@@ -1,7 +1,7 @@
 Package: ardea
 Type: Package
 Title: Infrastructure for Interacting with GPUs
-Version: 0.0.6
+Version: 0.0.7
 Authors@R: c(
     person("Nicholas",
             "Cooley",
@@ -9,7 +9,7 @@ Authors@R: c(
             role = c("aut", "cre"),
             comment = c(ORCID = "0000-0002-6029-304X"))
     )
-Description: Tools for compiling, managing, and dispatching functions to GPUs. Will compile tooling for successfully detected frameworks, currently limited to: OpenCL, CUDA, and Metal.
+Description: Tools for compiling, managing, and dispatching functions to GPUs. Will compile tooling for successfully detected frameworks, currently limited to: 'OpenCL' (<https://www.khronos.org/opencl/resources>), 'CUDA' (<https://docs.nvidia.com/cuda/>), and 'Metal' (<https://developer.apple.com/documentation/metal>).
 Imports: methods
 Suggests: 
     knitr,
