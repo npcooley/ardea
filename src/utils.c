@@ -7,11 +7,6 @@
  * not necessarily related to functions in utils.R
  * ========================================================================= */
 
-#ifdef __APPLE__
-  #include <OpenCL/opencl.h>
-#else
-  #include <CL/cl.h>
-#endif
 #include <R.h>
 #include <Rinternals.h>
 #include <stdio.h>

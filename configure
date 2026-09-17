@@ -616,23 +616,24 @@ if [ -n "${detected_cl_target}" ]; then
   opencl_target_define="-DCL_TARGET_OPENCL_VERSION=${detected_cl_target}"
 fi
 
-OPENCL_CPPFLAGS="${opencl_headers} ${opencl_target_define}"
-# collapse repeated spaces (e.g. when opencl_headers is empty) and trim
-# leading/trailing whitespace so an empty detection doesn't leave a stray
-# space at the front/back of the flag string
-OPENCL_CPPFLAGS=$(printf '%s' "${OPENCL_CPPFLAGS}" | tr -s ' ')
-OPENCL_CPPFLAGS=$(printf '%s' "${OPENCL_CPPFLAGS}" | sed -e 's/^ *//' -e 's/ *$//')
-OPENCL_LIBS="${opencl_shared_objects} ${opencl_link_flags} ${opencl_direct_pass_flags}"
-OPENCL_LIBS=$(printf '%s' "${OPENCL_LIBS}" | tr -s ' ')
-printf "OpenCL 'CPPFLAGS' inferred as:\n  %s\n" "${OPENCL_CPPFLAGS}"
-printf "OpenCL associated PKG_LIBS inferred as:\n %s\n" "${OPENCL_LIBS}"
-
 if [ ${opencl_exists} -eq 0 ]; then
   DEFINE_HAVE_OPENCL="#define HAVE_OPENCL 1"
   OPENCL_OBJECTS='$(OPENCL_C:.c=.o)'
+  OPENCL_CPPFLAGS="${opencl_headers} ${opencl_target_define}"
+  # collapse repeated spaces (e.g. when opencl_headers is empty) and trim
+  # leading/trailing whitespace so an empty detection doesn't leave a stray
+  # space at the front/back of the flag string
+  OPENCL_CPPFLAGS=$(printf '%s' "${OPENCL_CPPFLAGS}" | tr -s ' ')
+  OPENCL_CPPFLAGS=$(printf '%s' "${OPENCL_CPPFLAGS}" | sed -e 's/^ *//' -e 's/ *$//')
+  OPENCL_LIBS="${opencl_shared_objects} ${opencl_link_flags} ${opencl_direct_pass_flags}"
+  OPENCL_LIBS=$(printf '%s' "${OPENCL_LIBS}" | tr -s ' ')
+  printf "OpenCL 'CPPFLAGS' inferred as:\n  %s\n" "${OPENCL_CPPFLAGS}"
+  printf "OpenCL associated PKG_LIBS inferred as:\n %s\n" "${OPENCL_LIBS}"
 else
   DEFINE_HAVE_OPENCL="/* HAVE_OPENCL not defined: OpenCL unavailable on this build */"
   OPENCL_OBJECTS=""
+  OPENCL_CPPFLAGS=""
+  OPENCL_LIBS=""
 fi
 
 # end openCL testing
@@ -838,6 +839,4 @@ ardea_vars <- list(cuda_include = '${detect_cuda_include}',
                    cuda_devices_exist = as.integer('${cuda_devices_exist}'))
 save(ardea_vars, file = 'R/sysdata.rda')
 "
-
-
 

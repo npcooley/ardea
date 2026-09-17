@@ -40,16 +40,21 @@
  * they fail to find the device anyway, so
  * ¯\_(ツ)_/¯
  * ------------------------------------------------------------------------- */
-#ifdef __APPLE__
-  #include <OpenCL/opencl.h>
-#else
-  #include <CL/cl.h>
+
+
+/* -- sentinels have to exist to check for definitions ... ----------------- */
+#include "config.h"
+
+#ifdef HAVE_OPENCL
+  #ifdef __APPLE__
+    #include <OpenCL/opencl.h>
+  #else
+    #include <CL/cl.h>
+  #endif
 #endif
 #include <R_ext/Visibility.h>
 #include <stdint.h>
 #include <stddef.h>
-/* -- our optional capability sentinels ------------------------------------ */
-#include "config.h"
 
 
 /* ============================================================================
