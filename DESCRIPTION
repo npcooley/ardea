@@ -1,7 +1,7 @@
 Package: ardea
 Type: Package
 Title: Infrastructure for Interacting with GPUs
-Version: 0.0.4
+Version: 0.0.5
 Authors@R: c(
     person("Nicholas",
             "Cooley",
@@ -9,7 +9,7 @@ Authors@R: c(
             role = c("aut", "cre"),
             comment = c(ORCID = "0000-0002-6029-304X"))
     )
-Description: C and R level accessors for compiling, managing, and dispatching functions to GPUs. Includes tools for device discovery and management. Requires OpenCL; will optionally build out capabilities for Metal and CUDA if they're successfully detected.
+Description: Tools for compiling, managing, and dispatching functions to GPUs. Will compile tooling for successfully detected frameworks, currently limited to: OpenCL, CUDA, and Metal.
 Imports: methods
 Suggests: 
     knitr,
@@ -25,4 +25,4 @@ Encoding: UTF-8
 Author: Nicholas Cooley [aut, cre] (ORCID:
     <https://orcid.org/0000-0002-6029-304X>)
 Maintainer: Nicholas Cooley <npcooley@gmail.com>
-
+URL: https://github.com/npcooley/ardea

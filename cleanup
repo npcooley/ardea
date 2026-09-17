@@ -6,4 +6,4 @@ rm -f src/Makevars
 rm -f src/config.h
 rm -f R/sysdata.rda
 
-printf "cleanup complete"
+printf "cleanup complete\n"
