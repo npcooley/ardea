@@ -82,10 +82,27 @@ SEXP opencl_context_from_device(SEXP device_ptr,
              err);
   }
   
+#ifdef CL_VERSION_2_0
+  /* --------------------------------------------------------------------------
+   * post 2.0 function path
+   * 0-terminated property list;
+   * empty here since no special
+   * queue properties are needed 
+   * ----------------------------------------------------------------------- */
+  cl_queue_properties queue_props[] = { 0 };
+  cl_command_queue queue = clCreateCommandQueueWithProperties(context,
+                                                              device,
+                                                              queue_props,
+                                                              &err);
+#else
+  /* --------------------------------------------------------------------------
+   * pre 2.0 function path, most likely an apple (1.2) system ...
+   * ----------------------------------------------------------------------- */
   cl_command_queue queue = clCreateCommandQueue(context,
                                                 device,
                                                 0,
                                                 &err);
+#endif
   if (err != CL_SUCCESS || queue == NULL) {
     clReleaseContext(context);
     Rf_error("clCreateCommandQueue failed (CL error %d)",

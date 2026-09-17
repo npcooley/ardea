@@ -1,7 +1,7 @@
 Package: ardea
 Type: Package
 Title: Infrastructure for Interacting with GPUs
-Version: 0.0.5
+Version: 0.0.6
 Authors@R: c(
     person("Nicholas",
             "Cooley",

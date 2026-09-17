@@ -3,7 +3,7 @@ title: "ardea: introduction"
 author: "Nicholas Cooley"
 date: "`r Sys.Date()`"
 output:
-  BiocStyle::html_document
+  rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{introduction_to_ardea}
   %\VignetteEngine{knitr::rmarkdown}
@@ -248,3 +248,8 @@ if (metal_is_available()) {
 ```
 
 This is currently the limit of `ardea`'s functionality. This package began mostly as a curiousity project with Metal, and turning it into a CRAN acceptable package became a bit of a labor of love. If folks find this package useful I will consider expanding it to include other vendors, or more complicated dispatch routines. As it stands now, my primary concerns are conforming to CRAN submission guidelines, ensuring user interactions are clear and predictable, and working through a non-trivial TODO list.
+
+```{r}
+sessionInfo()
+```
+
