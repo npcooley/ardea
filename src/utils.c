@@ -74,7 +74,7 @@ void set_externalptr_class(SEXP ptr,
 }
 
 /* ============================================================================
- * sentinels for optional capabilities
+ * sentinels
  * ========================================================================= */
 
 SEXP metal_sentinel(void) {
@@ -93,4 +93,10 @@ SEXP cuda_sentinel(void) {
 #endif
 }
 
-
+SEXP opencl_sentinel(void) {
+#ifdef HAVE_OPENCL
+  return Rf_ScalarLogical(TRUE);
+#else
+  return Rf_ScalarLogical(FALSE);
+#endif
+}

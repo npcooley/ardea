@@ -629,8 +629,10 @@ printf "OpenCL associated PKG_LIBS inferred as:\n %s\n" "${OPENCL_LIBS}"
 
 if [ ${opencl_exists} -eq 0 ]; then
   DEFINE_HAVE_OPENCL="#define HAVE_OPENCL 1"
+  OPENCL_OBJECTS='$(OPENCL_C:.c=.o)'
 else
   DEFINE_HAVE_OPENCL="/* HAVE_OPENCL not defined: OpenCL unavailable on this build */"
+  OPENCL_OBJECTS=""
 fi
 
 # end openCL testing
@@ -787,6 +789,7 @@ sed -e "s|@OPENCL_CPPFLAGS@|${OPENCL_CPPFLAGS}|" \
   -e "s|@OBJECTS_CUDA@|${CUDA_OBJECTS}|" \
   -e "s|@CUDA_CPPFLAGS@|${CUDA_CPPFLAGS}|" \
   -e "s|@CUDA_LIBS@|${CUDA_LIBS}|" \
+  -e "s|@OBJECTS_OPENCL@|${OPENCL_OBJECTS}|" \
   src/Makevars.in > src/Makevars
 
 config_placeholder="${dir01}/config.h.in"
@@ -800,20 +803,22 @@ cat > "${config_placeholder}" << 'capture_this'
 #ifndef ARDEA_CONFIG_H
 #define ARDEA_CONFIG_H
 
-/* Metal support: defined to 1 if Metal was detected and its objects were
- * compiled, left undefined otherwise. Code that references Metal-only
- * types, functions, or CALL_DEF entries must be wrapped in
- * #ifdef HAVE_METAL ... #endif */
+/* ----------------------------------------------------------------------------
+ * We explicitly define when compilation is successful for a framework
+ * this is distinct from devices compliant to that framework being present
+ * ------------------------------------------------------------------------- */
 @DEFINE_HAVE_METAL@
 
-/* Placeholder for the same pattern once CUDA detection lands */
 @DEFINE_HAVE_CUDA@
+
+@DEFINE_HAVE_OPENCL@
 
 #endif /* ARDEA_CONFIG_H */
 capture_this
 
 sed -e "s|@DEFINE_HAVE_METAL@|${DEFINE_HAVE_METAL}|" \
   -e "s|@DEFINE_HAVE_CUDA@|${DEFINE_HAVE_CUDA}|" \
+  -e "s|@DEFINE_HAVE_OPENCL@|${DEFINE_HAVE_OPENCL}|" \
   "${config_placeholder}" > src/config.h
 
 # R/sysdata.rda is reserved data file that is loaded into the

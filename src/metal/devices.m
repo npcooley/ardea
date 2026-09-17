@@ -50,6 +50,20 @@ void** objc_metal_get_all_devices(size_t* count) {
   return device_array;
 }
 
+/* ----------------------------------------------------------------------------
+ * a count-only counterpart to objc_metal_get_all_devices() 
+ * lightweight for overhead checks
+ * ------------------------------------------------------------------------- */
+size_t objc_metal_device_count(void) {
+#if TARGET_OS_OSX
+  NSArray<id<MTLDevice>>* devices = MTLCopyAllDevices();
+  return devices ? [devices count] : 0;
+#else
+  id<MTLDevice> single = MTLCreateSystemDefaultDevice();
+  return single ? 1 : 0;
+#endif
+}
+
 const char* metal_device_name(void* device) {
   if (!device) return NULL;
   id<MTLDevice> mtl_device = (__bridge id<MTLDevice>)device;

@@ -3,6 +3,7 @@
 # configure sets with 'sed':
 #   OPENCL_CPPFLAGS == OpenCL include/define flags (e.g. -I..., -DCL_TARGET_OPENCL_VERSION=120)
 #   OPENCL_LIBS ====== OpenCL link flags (-L... -lOpenCL on Linux, -framework OpenCL on macOS)
+#   OBJECTS_OPENCL === $(OPENCL_C:.c=.o) if OpenCL is available, else empty
 #   METAL_CPPFLAGS === Metal include/define flags, or empty string if Metal unavailable
 #   METAL_LIBS ======= Metal link flags (-framework Metal ...), or empty string if unavailable
 #   OBJECTS_METAL ==== "$(METAL_C:.c=.o) $(METAL_M:.m=_m.o)" if Metal available, else empty
@@ -17,9 +18,6 @@ CUDA_CPPFLAGS = @CUDA_CPPFLAGS@
 
 PKG_LIBS = @OPENCL_LIBS@ @METAL_LIBS@ @CUDA_LIBS@
 
-# basic utils, and R init 
-BASE_SOURCES = utils.c R_init_ardea.c
-
 # C source files, for now this is pretty boring
 # order by:
 # depth (lowest first),
@@ -27,6 +25,11 @@ BASE_SOURCES = utils.c R_init_ardea.c
 # alphabetical 
 # source files added through sed handles should be grouped together and match that
 # formatting
+
+# basic utils, and R init 
+BASE_SOURCES = utils.c R_init_ardea.c
+
+# opencl C
 OPENCL_C = opencl/buffers.c \
 	opencl/contexts.c \
 	opencl/devices.c \
@@ -34,39 +37,38 @@ OPENCL_C = opencl/buffers.c \
 	opencl/runners.c \
 	opencl/utils.c
 	
-# Metal C source files
+# Metal C
 METAL_C = metal/buffers.c \
 	metal/devices.c \
 	metal/handles.c \
 	metal/runners.c \
 	metal/utils.c
 
-# Metal Objective-C source files
+# Metal Objective-C
 METAL_M = metal/buffers.m \
 	metal/devices.m \
 	metal/handles.m \
 	metal/runners.m \
 	metal/utils.m
 
-# CUDA C source files
+# CUDA C
 CUDA_C = cuda/buffers.c \
 	cuda/devices.c \
 	cuda/handles.c \
 	cuda/runners.c \
 	cuda/utils.c
 
-# compile opencl and base utils by default
+# only compile base utils by default
 OBJECTS_BASE = $(BASE_SOURCES:.c=.o)
-OBJECTS_OPENCL = $(OPENCL_C:.c=.o)
-# if we were compiling metal by default, it would look like this:
-# OBJECTS_METAL = $(METAL_C:.c=.o) $(METAL_M:.m=_m.o)
 
-# we when we are not compiling by default we need to detect through configure
+# when we are not compiling by default we need to detect via configure
 # configure populates these placeholders when it runs framework detection
-# routines
+# routines, this is *compilation success only* not a signal for a device
+# being present
+OBJECTS_OPENCL = @OBJECTS_OPENCL@
+
 OBJECTS_METAL = @OBJECTS_METAL@
 
-# again when we are not compiling by default we need to detect through configure
 OBJECTS_CUDA = @OBJECTS_CUDA@
 
 OBJECTS = $(OBJECTS_BASE) $(OBJECTS_OPENCL) $(OBJECTS_METAL) $(OBJECTS_CUDA)
@@ -85,6 +87,7 @@ metal/%_m.o: metal/%.m
 cuda/%.o: cuda/%.c
 	$(CC) $(ALL_CPPFLAGS) $(CUDA_CPPFLAGS) $(ALL_CFLAGS) -c $< -o $@
 
+# cleanup script in main package dir...
 # define a clean function
 # 
 # clean:

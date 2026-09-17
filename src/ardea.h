@@ -51,25 +51,35 @@
 /* -- our optional capability sentinels ------------------------------------ */
 #include "config.h"
 
+
+/* ============================================================================
+ * utils.c
+ * ========================================================================= */
+
+void *get_checked_external_ptr(SEXP ptr,
+                               SEXP expected_tag,
+                               const char *type_label);
+void set_externalptr_class(SEXP ptr,
+                           const char *specific_class);
+SEXP metal_sentinel(void);
+SEXP cuda_sentinel(void);
+SEXP opencl_sentinel(void);
+
+#ifdef HAVE_OPENCL
 /* ============================================================================
  * shared external-pointer tag symbols
  * created once via Rf_install() in R_init_ardea() at package load time.
  * every framework file validates external pointers against these same
  * symbols, rather than each file re-interning its own copy.
  * ========================================================================= */
-// extern SEXP device_id_tag;
 extern SEXP opencl_device_id;
-// extern SEXP platform_id_tag;
 extern SEXP opencl_platform_id;
-// extern SEXP context_tag;
 extern SEXP opencl_context;
-// extern SEXP program_tag;
 extern SEXP opencl_program;
-// extern SEXP kernel_tag;
 extern SEXP opencl_kernel;
 
 /* ============================================================================
- * package structs
+ * opencl structs
  * ========================================================================= */
 
 /* ----------------------------------------------------------------------------
@@ -105,18 +115,6 @@ typedef enum {
   OPENCL_TYPE_UINT,
   OPENCL_TYPE_ULONG
 } OpenCLType;
-
-/* ============================================================================
- * utils.c
- * ========================================================================= */
-
-void *get_checked_external_ptr(SEXP ptr,
-                               SEXP expected_tag,
-                               const char *type_label);
-void set_externalptr_class(SEXP ptr,
-                           const char *specific_class);
-SEXP metal_sentinel(void);
-SEXP cuda_sentinel(void);
 
 /* ============================================================================
  * opencl/buffers.c
@@ -186,8 +184,10 @@ size_t opencl_type_size(OpenCLType t);
 int device_supports_fp64(cl_device_id device);
 int device_supports_fp16(cl_device_id device);
 
-#ifdef HAVE_METAL
+/* -- end opencl definitions ----------------------------------------------- */
+#endif
 
+#ifdef HAVE_METAL
 /* ============================================================================
  * shared external-pointer tag symbols
  * created once via Rf_install() in R_init_ardea() at package load time.
@@ -252,7 +252,7 @@ SEXP metal_available_devices(void);
 SEXP c_metal_get_all_devices(void);
 SEXP c_metal_devices_default(void);
 SEXP c_metal_device_information(SEXP device_ptr);
-SEXP metal_available_devices(void);
+SEXP metal_exposed_device_count(void);
 
 /* -- metal/devices.m ------------------------------------------------------ */
 // general device interrogation
@@ -265,6 +265,7 @@ int metal_device_has_unified_memory(void* device);
 int metal_device_is_low_power(void* device);
 int metal_device_is_headless(void* device);
 int metal_device_is_removable(void* device);
+size_t objc_metal_device_count(void);
 // memory limits
 uint64_t metal_device_recommended_max_working_set_size(void* device);
 uint64_t metal_device_max_buffer_length(void* device);
@@ -410,7 +411,7 @@ void metal_release_library(void* library);
 void metal_release_function(void* function);
 void metal_release_pipeline(void* pipeline);
 
-/* -- end optional metal capabilties --------------------------------------- */
+/* -- end metal definitions ------------------------------------------------ */
 #endif
 
 #ifdef HAVE_CUDA
@@ -561,7 +562,7 @@ void cuda_default_block_dims(size_t target,
                              size_t block[3]);
 const char *cuda_driver_error_string(int cu_result);
 
-/* -- end optional cuda capabilities --------------------------------------- */
+/* -- end cuda definitions ------------------------------------------------- */
 #endif
 
 /* -- end header guard ----------------------------------------------------- */

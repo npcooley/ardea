@@ -12,16 +12,14 @@
 /* ============================================================================
  * shared external-pointer tag storage (extern-declared in ardea.h)
  * ========================================================================= */
-// SEXP device_id_tag = NULL;
+
+#ifdef HAVE_OPENCL
 SEXP opencl_device_id = NULL;
-// SEXP platform_id_tag = NULL;
 SEXP opencl_platform_id = NULL;
-// SEXP context_tag = NULL;
 SEXP opencl_context = NULL;
-// SEXP program_tag = NULL;
 SEXP opencl_program = NULL;
-// SEXP kernel_tag = NULL;
 SEXP opencl_kernel = NULL;
+#endif
 
 #ifdef HAVE_METAL
 SEXP metal_device = NULL;
@@ -68,6 +66,8 @@ static const R_CallMethodDef callMethods[] = {
   /* -- utils.c ------------------------------------------------------------ */
   CALL_DEF(metal_sentinel, 0),
   CALL_DEF(cuda_sentinel, 0),
+  CALL_DEF(opencl_sentinel, 0),
+#ifdef HAVE_OPENCL
   /* -- opencl/utils.c ----------------------------------------------------- */
   CALL_DEF(opencl_probe_type_support, 2),
   /* -- opencl/context.c --------------------------------------------------- */
@@ -80,8 +80,10 @@ static const R_CallMethodDef callMethods[] = {
   CALL_DEF(opencl_kernels_from_program, 2),
   /* -- opencl/runners.c --------------------------------------------------- */
   CALL_DEF(opencl_simple_runner, 7),
+#endif
 #ifdef HAVE_METAL
   /* -- metal/devices.c ---------------------------------------------------- */
+  CALL_DEF(metal_exposed_device_count, 0),
   CALL_DEF(c_metal_devices_default, 0),
   CALL_DEF(c_metal_get_all_devices, 0),
   CALL_DEF(c_metal_device_information, 1),
@@ -130,6 +132,7 @@ static const R_ExternalMethodDef externalMethods[] = {
 
 void R_init_ardea(DllInfo *info) {
   
+#ifdef HAVE_OPENCL
   opencl_device_id = Rf_install("opencl_device_id");
   opencl_platform_id = Rf_install("opencl_platform_id");
   opencl_context = Rf_install("opencl_context");
@@ -144,6 +147,7 @@ void R_init_ardea(DllInfo *info) {
   R_PreserveObject(opencl_context);
   R_PreserveObject(opencl_program);
   R_PreserveObject(opencl_kernel);
+#endif
   
 #ifdef HAVE_METAL
   metal_device = Rf_install("metal_device");

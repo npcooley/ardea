@@ -21,6 +21,15 @@
  * is required wherever "is this the default" matters.
  * ========================================================================= */
 
+/* ----------------------------------------------------------------------------
+ * lightweight device count for overhead capability checking
+ * same "count == 0 is an intentional no-op, not an error"
+ * convention as the other two frameworks
+ * ------------------------------------------------------------------------- */
+SEXP metal_exposed_device_count(void) {
+  return Rf_ScalarInteger((int)objc_metal_device_count());
+}
+
 SEXP c_metal_get_all_devices(void) {
   size_t count = 0;
   void **devices = objc_metal_get_all_devices(&count);
@@ -63,10 +72,15 @@ SEXP c_metal_devices_default(void) {
   SEXP device_ptr = PROTECT(R_MakeExternalPtr(device,
                                               metal_device,
                                               R_NilValue));
-  set_externalptr_class(device_ptr, "metal_device");
-  R_RegisterCFinalizerEx(device_ptr, metal_device_finalizer, TRUE);
+  set_externalptr_class(device_ptr,
+                        "metal_device");
+  R_RegisterCFinalizerEx(device_ptr,
+                         metal_device_finalizer,
+                         TRUE);
   
-  SET_VECTOR_ELT(result, 0, device_ptr);
+  SET_VECTOR_ELT(result,
+                 0,
+                 device_ptr);
   UNPROTECT(2);
   return result;
 }

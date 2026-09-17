@@ -7,10 +7,23 @@ importFrom("utils",
            "packageVersion",
            "getS3method")
 
+###### -- sentinel functions for optional capabilities ------------------------
+# availability
+export(metal_is_available)
+export(cuda_is_available)
+export(opencl_is_available)
+# device presence
+export(metal_devices_exist)
+export(cuda_devices_exist)
+export(opencl_devices_exist)
+
+# other
+export(supported_types_by_context)
+
 ###### -- opencl default capabilities -----------------------------------------
+# these must query `opencl_is_available` at the top ? maybe?
 
 # device query
-export(opencl_is_available)
 export(opencl_device_information)
 
 # handle management
@@ -20,13 +33,6 @@ export(opencl_make_context)
 
 # dispatch wrappers
 export(simple_wrapper)
-
-# other
-export(supported_types_by_context)
-
-###### -- sentinel functions for optional capabilities ------------------------
-export(metal_is_available)
-export(cuda_is_available)
 
 ###### -- metal functions -----------------------------------------------------
 # these must query `metal_is_available` at the top
