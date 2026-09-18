@@ -15,7 +15,7 @@ output:
 [![Lifecycle: maturing](https://img.shields.io/badge/lifecycle-maturing-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html)
 <!-- badges: end -->
 
-```{r}
+```{r setup_chunk_opts, include = FALSE}
 knitr::opts_chunk$set(results = 'hold')
 ```
 
@@ -69,7 +69,7 @@ There are at least two other major frameworks (for AMD and Intel devices) that m
 
 This package currently does not provide an interface for vendor supplied libraries. Functionality is currently focused on ingesting a user supplied framework specific function, compiling that function and preparing it for dispatch, executing function dispatch and buffer management, and returning that function's result to R.
 
-```{r, intro}
+```{r intro}
 library(ardea)
 
 opencl_is_available()
@@ -79,7 +79,7 @@ metal_is_available()
 
 Using matrix multiplication as an example, a user can bring a naive mm kernel function conforming to the a given framework's rules and requirements. In this case we can just write out our functions to temp files, and walk them forward through the frameworks and devices available on the current system. One of `ardea`'s current quirks is that it expects **the first argument of a function to be the output**. There is no keyword or tooling to enforce this, but the underlying buffer management currently only returns that first input from the device to R.
 
-```{r, device_funs}
+```{r device_funs}
 # write out a character vector to a tempfile for opencl, metal, and cuda
 opencl_mm_naive <- '
 __kernel void opencl_mm_naive(__global float* output,
@@ -159,7 +159,7 @@ writeLines(text = metal_mm_naive,
 
 Matrix multiplication doesn't need a lot of setup when using the builtin `%*%` function, which is calling on your R installation's BLAS library and is highly optimized. However, because we're reaching out to a device almost entirely *ab initio* with no helpers, we need to perform the work that those helpers would perform.
 
-```{r, setup}
+```{r setup_vals}
 # generic inputs, regardless of framework
 var00 <- vector(mode = "numeric",
                 length = 250000)
@@ -186,7 +186,7 @@ Every framework has its own unique verbiage and intricacies, though they're all 
 
 This means that frameworks share concepts, but not necessarily the same keywords, type names, specific paths, or user interactions.
 
-```{r, typing_diffs}
+```{r typing_diffs}
 opencl_arg_types <- c("float",
                       "long",
                       "long",
@@ -209,7 +209,7 @@ cuda_arg_types <- c("float",
 
 Though each framework handles program / module / library preparation somewhat uniquely, an effort has been made to unify how *users* interact with these steps. In this package OpenCL supports API-side compilation and program generation, while Metal supports both API-side, and system-side compilation and program management, and CUDA *only* supports system-side compilation. Meaning that under the hood Metal and CUDA are calling on system/vendor-specific compilers to build their libraries/modules (i.e. `clang` and `nvcc` respectively).
 
-```{r, prepping_dispatch}
+```{r prepping_dispatch}
 if (opencl_is_available()) {
   print("OpenCL is available on this system!")
   cl_dvcs <- opencl_device_information()
@@ -245,7 +245,7 @@ if (metal_is_available()) {
 
 A simple wrapper function is supplied with `ardea`, though it is mostly a thin wrapper for `.Call()` runner functions. It does perform some error checking, but for the most part users are being trusted with their judgements.
 
-```{r, execute_dispatch}
+```{r execute_dispatch}
 # our builtin optimized CPU implementation
 print("Builtin implementation:")
 system.time(res01 <- var01 %*% var02)

@@ -18,10 +18,6 @@ Nicholas Cooley
 maturing](https://img.shields.io/badge/lifecycle-maturing-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html)
 <!-- badges: end -->
 
-``` r
-knitr::opts_chunk$set(results = 'hold')
-```
-
 # Introduction
 
 *This package has been recently submitted to CRAN, and is relatively
@@ -400,13 +396,13 @@ if (metal_is_available()) {
 
     ## [1] "Builtin implementation:"
     ##    user  system elapsed 
-    ##   0.032   0.000   0.031 
+    ##   0.030   0.000   0.031 
     ## [1] "OpenCL implementation:"
     ##    user  system elapsed 
-    ##   0.002   0.003   0.019 
+    ##   0.002   0.002   0.016 
     ## [1] "Metal implementation:"
     ##    user  system elapsed 
-    ##   0.001   0.001   0.006
+    ##   0.001   0.001   0.004
 
 This is currently the limit of `ardea`’s functionality. This package
 began mostly as a curiousity project with Metal, and turning it into a
