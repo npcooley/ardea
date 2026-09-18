@@ -35,7 +35,8 @@
   An external pointer of class \code{"cuda_module"} wrapping the loaded module.
 }
 \examples{
-if (cuda_is_available()) {
+if (cuda_is_available() &
+    cuda_devices_exist()) {
   devices <- cuda_device_information()
   ctx <- cuda_make_context(devices[[1]])
 

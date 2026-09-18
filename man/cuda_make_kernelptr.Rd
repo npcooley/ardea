@@ -32,7 +32,8 @@
   A named list of external pointers of class \code{"cuda_kernel"}, one per element of \code{kernel_names}.
 }
 \examples{
-if (cuda_is_available()) {
+if (cuda_is_available() &
+    cuda_devices_exist()) {
   devices <- cuda_device_information()
   ctx <- cuda_make_context(devices[[1]])
   # mod <- cuda_make_program("kernel.cu", ctx)

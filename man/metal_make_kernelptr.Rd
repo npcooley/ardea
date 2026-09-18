@@ -33,7 +33,8 @@
   A named list of external pointers of class \code{"metal_pipeline"}, one per element of \code{kernel_names}.
 }
 \examples{
-if (metal_is_available()) {
+if (metal_is_available() &
+    metal_devices_exist()) {
   devices <- metal_device_information()
   ctx <- metal_make_context(devices[[1]])
   # lib <- metal_make_program("kernel.metal", ctx)

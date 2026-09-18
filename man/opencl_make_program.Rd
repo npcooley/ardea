@@ -74,7 +74,8 @@ opencl_make_program(cl_file,
   It exists for cases where compile-time configuration or a specific numerical/language mode is needed, not as a required argument.
 }
 \examples{
-if (opencl_is_available()) {
+if (opencl_is_available() &
+    opencl_devices_exist()) {
   kernel_source <- "
     __kernel void add_one(__global float *data) {
     int gid = get_global_id(0);

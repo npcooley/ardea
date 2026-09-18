@@ -33,7 +33,8 @@
   This is consumed by other \code{ardea} functions that require a context, such as \code{\link{cuda_make_program}} and \code{\link{cuda_make_kernelptr}}.
 }
 \examples{
-if (cuda_is_available()) {
+if (cuda_is_available() &
+    cuda_devices_exist()) {
   devices <- cuda_device_information()
   ctx <- cuda_make_context(devices[[1]])
 }

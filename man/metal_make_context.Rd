@@ -30,7 +30,8 @@
   This is consumed by other \code{ardea} functions that require a context, such as \code{\link{metal_make_program}} and \code{\link{metal_make_kernelptr}}.
 }
 \examples{
-if (metal_is_available()) {
+if (metal_is_available() &
+    metal_devices_exist()) {
   devices <- metal_device_information()
   ctx <- metal_make_context(devices[[1]])
 }

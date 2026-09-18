@@ -31,7 +31,8 @@ opencl_make_kernelptr(program,
   Each returned kernel handle is reference-counted by the OpenCL runtime and should be released automatically (\code{clReleaseKernel}) when its R external pointer is garbage collected.
 }
 \examples{
-if (opencl_is_available()) {
+if (opencl_is_available() &
+    opencl_devices_exist()) {
   kernel_source <- "
     __kernel void add_one(__global float *data) {
     int gid = get_global_id(0);

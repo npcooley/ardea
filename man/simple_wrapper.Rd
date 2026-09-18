@@ -94,7 +94,8 @@ simple_wrapper(framework = c("opencl",
   
   res01 <- var01 %*% var02
   
-  if (opencl_is_available()) {
+  if (opencl_is_available() &
+      opencl_devices_exist()) {
   
     opencl_arg_types <- c("float", # output(0)
                           "long",  # M (scalar)
@@ -144,7 +145,8 @@ __kernel void opencl_mm_naive(__global float* output,
 
     unlink(tmp01)
   }
-  if (metal_is_available()) {
+  if (metal_is_available() &
+      metal_devices_exist()) {
     metal_arg_types = c("float", # buffer(0): output
                         "uint", # buffer(1): M (scalar)
                         "uint", # buffer(2): K (scalar)

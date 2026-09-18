@@ -33,7 +33,8 @@
   This is consumed by other \code{ardea} functions that require a context, such as \code{\link{opencl_make_program}}.
 }
 \examples{
-if (opencl_is_available()) {
+if (opencl_is_available() &
+    opencl_devices_exist()) {
   devices <- opencl_device_information()
   ctx <- opencl_make_context(devices[[1]])
 }
