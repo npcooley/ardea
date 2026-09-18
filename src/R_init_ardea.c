@@ -46,8 +46,7 @@ SEXP cuda_kernel = NULL;
  * DL_FUNC == type cast; cast the function pointer to R's expected type
  * ## == Token Pasting == Joins two tokens == x##y gives xy
  * 
- * ACFmetal currently does not use .C, but if it ever needs to just
- * uncomment that line
+ * We currently don't use .C, but the definition is there just in case
  * ========================================================================= */
 
 // Define .Call definition for simpler formatting

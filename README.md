@@ -1,10 +1,11 @@
-ardea 0.0.6
+ardea 0.0.8
 ================
 Nicholas Cooley
-2026-09-17
+2026-09-18
 
 - [Introduction](#introduction)
-- [Installation](#installation)
+  - [Installation](#installation)
+- [Installation Details](#installation-details)
   - [OpenCL](#opencl)
   - [Metal](#metal)
   - [CUDA](#cuda)
@@ -24,6 +25,26 @@ maturing](https://img.shields.io/badge/lifecycle-maturing-orange.svg)](https://l
 stable. It has only been thoroughly tested on a Mac M4, and a linux
 server running an NVIDIA A30.*
 
+## Installation
+
+Once this package is on CRAN, that should be the preferred installation
+source, until then it can be installed from this repo via `pak`:
+
+``` r
+if (requireNamespace("pak", quietly = TRUE)) {
+  pak::pkg_install("npcooley/ardea")
+}
+```
+
+Or by cloning the repo and installing directly:
+
+``` sh
+# requires git
+git clone https://github.com/npcooley/ardea.git
+# requires a working R installation
+R CMD install --no-build-vignettes ardea
+```
+
 This package is an attempt at building out infrastructure for users to
 dispatch code directly to GPU devices in R. It is currently designed to
 work wherever R works. During installation, it probes the system for the
@@ -35,7 +56,7 @@ frameworks is successfully detected.
 Because I do not have a Windows development environment, Windows is not
 currently supported.
 
-# Installation
+# Installation Details
 
 `ardea` goes through a fair amount of gymnastics to detect capabilities
 and manage installation. A series of `ARDEA_<FRAMEWORK>_<KEYWORD>`
@@ -286,7 +307,8 @@ calling on system/vendor-specific compilers to build their
 libraries/modules (i.e. `clang` and `nvcc` respectively).
 
 ``` r
-if (opencl_is_available()) {
+if (opencl_is_available() &
+    opencl_devices_exist()) {
   print("OpenCL is available on this system!")
   cl_dvcs <- opencl_device_information()
   cl_ctx <- opencl_make_context(device = cl_dvcs[[1]])
@@ -295,7 +317,8 @@ if (opencl_is_available()) {
   cl_knl <- opencl_make_kernelptr(program = cl_program,
                                   kernel_names = "opencl_mm_naive")
 }
-if (cuda_is_available()) {
+if (cuda_is_available() &
+    cuda_devices_exist()) {
   print("CUDA is available on this system!")
   cu_dvcs <- cuda_device_information()
   cu_ctx <- cuda_make_context(device = cu_dvcs[[1]])
@@ -306,7 +329,8 @@ if (cuda_is_available()) {
                                 context = cu_ctx,
                                 kernel_names = "cuda_mm_naive")
 }
-if (metal_is_available()) {
+if (metal_is_available() &
+    metal_devices_exist()) {
   print("Metal is available on this system!")
   mtl_dvcs <- metal_device_information()
   mtl_ctx <- metal_make_context(device = mtl_dvcs[[1]])
@@ -331,7 +355,8 @@ judgements.
 # our builtin optimized CPU implementation
 print("Builtin implementation:")
 system.time(res01 <- var01 %*% var02)
-if (opencl_is_available()) {
+if (opencl_is_available() &
+    opencl_devices_exist()) {
   print("OpenCL implementation:")
   print(system.time(res02 <- simple_wrapper(framework = "opencl",
                                             context_ptr = cl_ctx,
@@ -354,7 +379,8 @@ if (opencl_is_available()) {
 ![](README_files/figure-gfm/execute_dispatch-1.png)<!-- -->
 
 ``` r
-if (cuda_is_available()) {
+if (cuda_is_available() &
+    cuda_devices_exist()) {
   print("CUDA implementation:")
   print(system.time(res03 <- simple_wrapper(framework = "cuda",
                                             context_ptr = cu_ctx,
@@ -372,7 +398,8 @@ if (cuda_is_available()) {
        xlab = "builtin",
        ylab = "CUDA")
 }
-if (metal_is_available()) {
+if (metal_is_available() &
+    metal_devices_exist()) {
   print("Metal implementation:")
   print(system.time(res03 <- simple_wrapper(framework = "metal",
                                             context_ptr = mtl_ctx,
@@ -396,13 +423,13 @@ if (metal_is_available()) {
 
     ## [1] "Builtin implementation:"
     ##    user  system elapsed 
-    ##   0.030   0.000   0.031 
+    ##   0.031   0.001   0.031 
     ## [1] "OpenCL implementation:"
     ##    user  system elapsed 
     ##   0.002   0.002   0.016 
     ## [1] "Metal implementation:"
     ##    user  system elapsed 
-    ##   0.001   0.001   0.004
+    ##   0.001   0.000   0.006
 
 This is currently the limit of `ardea`’s functionality. This package
 began mostly as a curiousity project with Metal, and turning it into a

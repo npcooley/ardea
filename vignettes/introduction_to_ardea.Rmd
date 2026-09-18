@@ -12,6 +12,10 @@ editor_options:
   chunk_output_type: console
 ---
 
+```{r setup_chunk_opts, include = FALSE}
+knitr::opts_chunk$set(results = 'hold')
+```
+
 # Introduction
 
 `ardea` provides access to GPU devices and frameworks natively in R. It currently provides rudimentary access to `OpenCL`, `CUDA`, and `Metal`; letting users compile, test, and implement their own device specific code. `ardea` currently only *requires* existing OpenCL to install appropriately, but will selectively build out access to frameworks and devices that it can detect during package installation.
