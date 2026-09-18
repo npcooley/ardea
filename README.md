@@ -1,7 +1,7 @@
-ardea 0.0.3
+ardea 0.0.6
 ================
 Nicholas Cooley
-2026-09-16
+2026-09-17
 
 - [Introduction](#introduction)
 - [Installation](#installation)
@@ -11,24 +11,30 @@ Nicholas Cooley
   - [Other](#other)
 - [Example Code](#example-code)
 
+<!-- badges: start -->
+
+[![R-CMD-check](https://github.com/npcooley/ardea/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/npcooley/ardea/actions/workflows/R-CMD-check.yaml)
+[![Lifecycle:
+maturing](https://img.shields.io/badge/lifecycle-maturing-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html)
+<!-- badges: end -->
+
+``` r
+knitr::opts_chunk$set(results = 'hold')
+```
+
 # Introduction
 
-*Currently under construction! This package works on at least one mac,
-and one server running an A30.* *CRAN submission will be happening
-soon!*
+*This package has been recently submitted to CRAN, and is relatively
+stable. It has only been thoroughly tested on a Mac M4, and a linux
+server running an NVIDIA A30.*
 
 This package is an attempt at building out infrastructure for users to
-dispatch code directly to GPU devices in R. The package uses OpenCL as
-an ‘parent’ capability requirement, allowing it to build on machines
-regardless of device vendor, or on machines that do not have a device
-present.
-
-This package is currently designed to work wherever R works. During
-installation, it probes the system for the ability to successfully
-compile and run simple `Hello World` style device probes for target
-frameworks and their devices. Capabilities for specific frameworks are
-only compiled if the tooling for those frameworks is successfully
-detected.
+dispatch code directly to GPU devices in R. It is currently designed to
+work wherever R works. During installation, it probes the system for the
+ability to successfully compile and run simple `Hello World` style
+device probes for target frameworks and their devices. Capabilities for
+specific frameworks are only compiled if the tooling for those
+frameworks is successfully detected.
 
 Because I do not have a Windows development environment, Windows is not
 currently supported.
@@ -36,20 +42,22 @@ currently supported.
 # Installation
 
 `ardea` goes through a fair amount of gymnastics to detect capabilities
-and manage installation. The `ARDEA_<FRAMEWORK>_<KEYWORD>` environment
-variables that the configure script ingests if present are used *during
-build*, so users can hypothetically build out containers that may land
-on diverse resources where these can be re-set for the new environment.
+and manage installation. A series of `ARDEA_<FRAMEWORK>_<KEYWORD>`
+environment variables will be ingested by the configure script if
+present and are used *during build*, so users can hypothetically build
+out containers that may land on diverse resources where these can be
+re-set for the new environment.
 
 ## OpenCL
 
-OpenCL is an open source standard for interacting with GPUs and other
-alternative compute devices, regardless of vendor. On Macs, this
-framework is not current, and does not appear to be updateable *but does
-work still*. On Linux systems, default OpenCL installations should be
-detected automatically over the course of package installation. If they
-are not, or users have a non-standard installation, `ardea` checks for
-user environment variables:
+[OpenCL](https://www.khronos.org/opencl/resources) is an open source
+standard for interacting with GPUs and other alternative compute
+devices, regardless of vendor. On Macs, this framework is not current,
+and does not appear to be updateable *but does work still*. On Linux
+systems, default OpenCL installations should be detected automatically
+over the course of package installation. If they are not, or users have
+a non-standard installation, `ardea` checks for user environment
+variables:
 
 - **ARDEA_OPENCL_LIBS**
 - **ARDEA_OPENCL_INCLUDE**
@@ -58,20 +66,22 @@ to specify library and linker locations.
 
 ## Metal
 
-Metal is Apple’s framework for interacting with GPUs and builtin devices
-within their ecosystem. If the package detects Darwin as the OS, Metal
-detection is triggered. Metal has gone through a few changes as Apple
-has used a few different device vendors over the years and though its
-most recent iteration appears focused on Silicon series chips.
+[Metal](https://developer.apple.com/documentation/metal) is Apple’s
+framework for interacting with GPUs and builtin devices within their
+ecosystem. If the package detects Darwin as the OS, Metal detection is
+triggered. Metal has gone through a few changes as Apple has used a few
+different device vendors over the years and though its most recent
+iteration appears focused on Silicon series chips.
 
 Metal capabilities in this package were originally built out in the
 [ACFmetal](https://github.com/npcooley/ACFmetal) github only R package.
 
 ## CUDA
 
-CUDA is NVIDIA’s framework for interacting with NVIDIA devices. Because
-CUDA installations have so many different flavors and many of their own
-peculiarities, CUDA support *requires* user environment variables:
+[CUDA](https://docs.nvidia.com/cuda/) is NVIDIA’s framework for
+interacting with NVIDIA devices. Because CUDA installations can have
+many different flavors and many of their own peculiarities, CUDA support
+*requires* user environment variables:
 
 - **ARDEA_CUDA_LIBS**
 - **ARDEA_CUDA_STUBS**
@@ -113,20 +123,12 @@ management, and returning that function’s result to R.
 library(ardea)
 
 opencl_is_available()
-```
-
-    ## [1] TRUE
-
-``` r
 cuda_is_available()
-```
-
-    ## [1] FALSE
-
-``` r
 metal_is_available()
 ```
 
+    ## [1] TRUE
+    ## [1] FALSE
     ## [1] TRUE
 
 Using matrix multiplication as an example, a user can bring a naive mm
@@ -297,11 +299,6 @@ if (opencl_is_available()) {
   cl_knl <- opencl_make_kernelptr(program = cl_program,
                                   kernel_names = "opencl_mm_naive")
 }
-```
-
-    ## [1] "OpenCL is available on this system!"
-
-``` r
 if (cuda_is_available()) {
   print("CUDA is available on this system!")
   cu_dvcs <- cuda_device_information()
@@ -326,6 +323,7 @@ if (metal_is_available()) {
 }
 ```
 
+    ## [1] "OpenCL is available on this system!"
     ## [1] "Metal is available on this system!"
 
 A simple wrapper function is supplied with `ardea`, though it is mostly
@@ -336,18 +334,7 @@ judgements.
 ``` r
 # our builtin optimized CPU implementation
 print("Builtin implementation:")
-```
-
-    ## [1] "Builtin implementation:"
-
-``` r
 system.time(res01 <- var01 %*% var02)
-```
-
-    ##    user  system elapsed 
-    ##   0.031   0.001   0.031
-
-``` r
 if (opencl_is_available()) {
   print("OpenCL implementation:")
   print(system.time(res02 <- simple_wrapper(framework = "opencl",
@@ -362,13 +349,11 @@ if (opencl_is_available()) {
                                             workers_per = NULL)))
   plot(as.vector(res01),
        res02,
-       pch = 46)
+       pch = 46,
+       xlab = "builtin",
+       ylab = "OpenCL")
 }
 ```
-
-    ## [1] "OpenCL implementation:"
-    ##    user  system elapsed 
-    ##   0.002   0.002   0.017
 
 ![](README_files/figure-gfm/execute_dispatch-1.png)<!-- -->
 
@@ -387,7 +372,9 @@ if (cuda_is_available()) {
                                             workers_per = NULL)))
   plot(as.vector(res01),
        res03,
-       pch = 46)
+       pch = 46,
+       xlab = "builtin",
+       ylab = "CUDA")
 }
 if (metal_is_available()) {
   print("Metal implementation:")
@@ -403,15 +390,23 @@ if (metal_is_available()) {
                                             workers_per = NULL)))
   plot(as.vector(res01),
        res03,
-       pch = 46)
+       pch = 46,
+       xlab = "builtin",
+       ylab = "metal")
 }
 ```
 
+![](README_files/figure-gfm/execute_dispatch-2.png)<!-- -->
+
+    ## [1] "Builtin implementation:"
+    ##    user  system elapsed 
+    ##   0.032   0.000   0.031 
+    ## [1] "OpenCL implementation:"
+    ##    user  system elapsed 
+    ##   0.002   0.003   0.019 
     ## [1] "Metal implementation:"
     ##    user  system elapsed 
     ##   0.001   0.001   0.006
-
-![](README_files/figure-gfm/execute_dispatch-2.png)<!-- -->
 
 This is currently the limit of `ardea`’s functionality. This package
 began mostly as a curiousity project with Metal, and turning it into a
