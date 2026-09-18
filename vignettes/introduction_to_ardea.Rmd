@@ -159,7 +159,8 @@ cuda_arg_types <- c("float",
 Though each framework handles program / module / library preparation somewhat uniquely, an effort has been made to unify how *users* interact with these steps. In this package OpenCL supports API-side compilation and program generation, while Metal supports both API-side, and system-side compilation and program management, and CUDA *only* supports system-side compilation. Meaning that under the hood Metal and CUDA are calling on system/vendor-specific compilers to build their libraries/modules (i.e. `clang` and `nvcc` respectively).
 
 ```{r, prepping_dispatch}
-if (opencl_is_available()) {
+if (opencl_is_available() &
+    opencl_devices_exist()) {
   print("OpenCL is available on this system!")
   cl_dvcs <- opencl_device_information()
   cl_ctx <- opencl_make_context(device = cl_dvcs[[1]])
@@ -168,7 +169,8 @@ if (opencl_is_available()) {
   cl_knl <- opencl_make_kernelptr(program = cl_program,
                                   kernel_names = "opencl_mm_naive")
 }
-if (cuda_is_available()) {
+if (cuda_is_available() &
+    cuda_devices_exist()) {
   print("CUDA is available on this system!")
   cu_dvcs <- cuda_device_information()
   cu_ctx <- cuda_make_context(device = cu_dvcs[[1]])
@@ -179,7 +181,8 @@ if (cuda_is_available()) {
                                 context = cu_ctx,
                                 kernel_names = "cuda_mm_naive")
 }
-if (metal_is_available()) {
+if (metal_is_available() &
+    metal_devices_exist()) {
   print("Metal is available on this system!")
   mtl_dvcs <- metal_device_information()
   mtl_ctx <- metal_make_context(device = mtl_dvcs[[1]])
@@ -197,7 +200,8 @@ A simple wrapper function is supplied with `ardea`, though it is mostly a thin w
 ```{r, execute_dispatch}
 # our builtin optimized CPU implementation
 system.time(res01 <- var01 %*% var02) 
-if (opencl_is_available()) {
+if (opencl_is_available() &
+    opencl_devices_exist()) {
   print("OpenCL implementation:")
   system.time(res02 <- simple_wrapper(framework = "opencl",
                                       context_ptr = cl_ctx,
@@ -213,7 +217,8 @@ if (opencl_is_available()) {
        res02,
        pch = 46)
 }
-if (cuda_is_available()) {
+if (cuda_is_available() &
+    cuda_devices_exist()) {
   print("CUDA implementation:")
   system.time(res03 <- simple_wrapper(framework = "cuda",
                                       context_ptr = cu_ctx,
@@ -229,7 +234,8 @@ if (cuda_is_available()) {
        res03,
        pch = 46)
 }
-if (metal_is_available()) {
+if (metal_is_available() &
+    metal_devices_exist()) {
   print("Metal implementation:")
   system.time(res03 <- simple_wrapper(framework = "metal",
                                       context_ptr = mtl_ctx,
