@@ -36,7 +36,8 @@ supported_types_by_context(framework = c("opencl",
   \code{framework = "metal"} and \code{framework = "cuda"} are accepted by \code{\link{match.arg}} but currently raise \code{"not yet supported"} errors once past the class check; support for these frameworks is planned but not yet implemented.
 }
 \examples{
-if (opencl_is_available()) {
+if (opencl_is_available() &
+    opencl_devices_exist()) {
   devices <- opencl_device_information()
   ctx <- opencl_make_context(devices[[1]])
 
