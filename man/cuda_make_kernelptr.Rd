@@ -32,12 +32,37 @@
   A named list of external pointers of class \code{"cuda_kernel"}, one per element of \code{kernel_names}.
 }
 \examples{
+cuda_mm_naive <- '
+extern "C" __global__ void cuda_mm_naive(float* output,
+                                         const long long M,
+                                         const long long K,
+                                         const long long N,
+                                         const float* A,
+                                         const float* B)
+{
+    long long row = blockIdx.x * blockDim.x + threadIdx.x;
+    long long col = blockIdx.y * blockDim.y + threadIdx.y;
+
+    if (row < M && col < N) {
+        float sum = 0.0f;
+        for (long long k = 0; k < K; k++) {
+            sum += A[row + k * M] * B[k + col * K];
+        }
+        output[row + col * M] = sum;
+    }
+}
+'
+tmp_cu <- tempfile(fileext = ".cu")
+writeLines(text = cuda_mm_naive,
+           con = tmp_cu)
+
+
 if (cuda_is_available() &
     cuda_devices_exist()) {
   devices <- cuda_device_information()
   ctx <- cuda_make_context(devices[[1]])
-  # mod <- cuda_make_program("kernel.cu", ctx)
-  # kernels <- cuda_make_kernelptr(mod, ctx, c("my_kernel"))
+  mod <- cuda_make_program(tmp_cu, ctx)
+  kernels <- cuda_make_kernelptr(mod, ctx, c("cuda_mm_naive"))
 }
 }
 \seealso{

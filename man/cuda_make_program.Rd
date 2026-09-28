@@ -35,18 +35,37 @@
   An external pointer of class \code{"cuda_module"} wrapping the loaded module.
 }
 \examples{
+
+cuda_mm_naive <- '
+extern "C" __global__ void cuda_mm_naive(float* output,
+                                         const long long M,
+                                         const long long K,
+                                         const long long N,
+                                         const float* A,
+                                         const float* B)
+{
+    long long row = blockIdx.x * blockDim.x + threadIdx.x;
+    long long col = blockIdx.y * blockDim.y + threadIdx.y;
+
+    if (row < M && col < N) {
+        float sum = 0.0f;
+        for (long long k = 0; k < K; k++) {
+            sum += A[row + k * M] * B[k + col * K];
+        }
+        output[row + col * M] = sum;
+    }
+}
+'
+tmp_cu <- tempfile(fileext = ".cu")
+writeLines(text = cuda_mm_naive,
+           con = tmp_cu)
+
 if (cuda_is_available() &
     cuda_devices_exist()) {
   devices <- cuda_device_information()
   ctx <- cuda_make_context(devices[[1]])
 
-  # mod <- cuda_make_program("kernel.cu", ctx)
-
-  # with an extra include path
-  # mod2 <- cuda_make_program("kernel.cu",
-  #                           ctx,
-  #                           ptx_file = tempfile(fileext = ".ptx"),
-  #                           nvcc_flags = c("-I", "/path/to/headers"))
+  mod <- cuda_make_program(tmp_cu, ctx)
 }
 }
 \seealso{

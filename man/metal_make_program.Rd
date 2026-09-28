@@ -45,18 +45,44 @@
   An external pointer of class \code{"metal_library"} wrapping the compiled library.
 }
 \examples{
+metal_mm_naive <- '
+kernel void metal_mm_naive(device float* output [[buffer(0)]],
+                           constant uint& M [[buffer(1)]],
+                           constant uint& K [[buffer(2)]],
+                           constant uint& N [[buffer(3)]],
+                           device const float* A [[buffer(4)]],
+                           device const float* B [[buffer(5)]],
+                           uint2 id [[thread_position_in_grid]])
+{
+    uint row = id.x;
+    uint col = id.y;
+
+    if (row < M && col < N) {
+        float sum = 0.0f;
+        for (uint k = 0; k < K; k++) {
+            sum += A[row + k * M] * B[k + col * K];
+        }
+        output[row + col * M] = sum;
+    }
+}
+'
+tmp_metal <- tempfile(fileext = ".metal")
+tmp_metallib <- tempfile(fileext = ".metallib")
+writeLines(text = metal_mm_naive,
+           con = tmp_metal)
+
 if (metal_is_available() &
     metal_devices_exist()) {
   devices <- metal_device_information()
   ctx <- metal_make_context(devices[[1]])
 
   # runtime API compilation
-  # lib <- metal_make_program("kernel.metal", ctx)
+  lib <- metal_make_program(tmp_metal, ctx)
 
-  # xcrun compilation, with an extra include path
-  # lib2 <- metal_make_program("kernel.metal",
-  #                            ctx,
-  #                            metallib_file = tempfile(fileext = ".metallib"))
+  # xcrun compilation
+  lib2 <- metal_make_program(tmp_metal,
+                             ctx,
+                             metallib_file = tmp_metallib)
 }
 }
 \seealso{
