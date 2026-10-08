@@ -80,9 +80,11 @@ if (metal_is_available() &
   lib <- metal_make_program(tmp_metal, ctx)
 
   # xcrun compilation
-  lib2 <- metal_make_program(tmp_metal,
-                             ctx,
-                             metallib_file = tmp_metallib)
+  if (metal_compiler_is_available()) {
+    lib2 <- metal_make_program(tmp_metal,
+                               ctx,
+                               metallib_file = tmp_metallib)
+  }
 }
 }
 \seealso{

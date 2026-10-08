@@ -248,9 +248,15 @@ if (metal_is_available() &
   print("Metal is available on this system!")
   mtl_dvcs <- metal_device_information()
   mtl_ctx <- metal_make_context(device = mtl_dvcs[[1]])
-  mtl_program <- metal_make_program(metal_file = tmp_metal,
-                                    metallib_file = tmp_metallib,
-                                    context = mtl_ctx)
+  if (metal_compiler_is_available()) {
+    mtl_program <- metal_make_program(metal_file = tmp_metal,
+                                      metallib_file = tmp_metallib,
+                                      context = mtl_ctx)
+  } else {
+    mtl_program <- metal_make_program(metal_file = tmp_metal,
+                                      context = mtl_ctx)
+  }
+  
   mtl_knl <- metal_make_kernelptr(program = mtl_program,
                                   context = mtl_ctx,
                                   kernel_names = "metal_mm_naive")

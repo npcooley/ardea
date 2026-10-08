@@ -17,6 +17,9 @@ export(metal_devices_exist)
 export(cuda_devices_exist)
 export(opencl_devices_exist)
 
+# offline compiler support for metal
+export(metal_compiler_is_available)
+
 # other
 export(supported_types_by_context)
 

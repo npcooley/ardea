@@ -70,4 +70,43 @@ cuda_devices_exist <- function() {
   }
 }
 
+###### -- check for the offline metal compiler --------------------------------
+
+# three stage check for the system side metal compiler
+# correct os
+# xcrun exists
+# xcrun has the right toolchain
+
+metal_compiler_is_available <- function() {
+  # only valid to check when we have the right OS
+  sys_info <- Sys.info()
+  if (is.null(sys_info) ||
+      !identical(unname(sys_info[["sysname"]]),
+                 "Darwin")) {
+    return(FALSE)
+  }
+  xcrun_path <- Sys.which("xcrun")
+  if (length(xcrun_path) != 1L ||
+      !nzchar(xcrun_path)) {
+    return(FALSE)
+  }
+  # run the actual tool rather than only locating it: some Xcode versions
+  # ship a stub 'metal' that exists but fails when the toolchain is missing
+  status <- tryCatch(suppressWarnings(system2(command = xcrun_path,
+                                              args = c("-sdk",
+                                                       "macosx",
+                                                       "metal",
+                                                       "--version"),
+                                              stdout = FALSE,
+                                              stderr = FALSE)),
+                     error = function(e) {
+                       NA_integer_
+                     })
+  res <- length(status) == 1L &&
+    !is.na(status) &&
+    identical(as.integer(status),
+              0L)
+  return(res)
+}
+
 ###### -- OTHER ---------------------------------------------------------------
