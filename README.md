@@ -1,7 +1,7 @@
-ardea 0.0.8
+ardea 0.1.1
 ================
 Nicholas Cooley
-2026-09-18
+2026-10-08
 
 - [Introduction](#introduction)
   - [Installation](#installation)
@@ -21,14 +21,20 @@ maturing](https://img.shields.io/badge/lifecycle-maturing-orange.svg)](https://l
 
 # Introduction
 
-*This package has been recently submitted to CRAN, and is relatively
-stable. It has only been thoroughly tested on a Mac M4, and a linux
-server running an NVIDIA A30.*
+*This package has been accepted to CRAN, and is relatively stable. It
+has only been thoroughly tested on a Mac M4, and a linux server running
+an NVIDIA A30.*
 
 ## Installation
 
-Once this package is on CRAN, that should be the preferred installation
-source, until then it can be installed from this repo via `pak`:
+The canonical form of `ardea` can be installed from CRAN via:
+
+``` r
+install.packages("ardea")
+```
+
+The version of `ardea` present in this repo can be installed from via
+`pak`:
 
 ``` r
 if (requireNamespace("pak", quietly = TRUE)) {
@@ -48,9 +54,9 @@ R CMD install --no-build-vignettes ardea
 This package is an attempt at building out infrastructure for users to
 dispatch code directly to GPU devices in R. It is currently designed to
 work wherever R works. During installation, it probes the system for the
-ability to successfully compile and run simple `Hello World` style
-device probes for target frameworks and their devices. Capabilities for
-specific frameworks are only compiled if the tooling for those
+ability to successfully compile and run `Hello World` style device
+probes for target frameworks and their devices. Capabilities for
+specific frameworks are only compiled if the tool chain for those
 frameworks is successfully detected.
 
 Because I do not have a Windows development environment, Windows is not
@@ -334,9 +340,14 @@ if (metal_is_available() &
   print("Metal is available on this system!")
   mtl_dvcs <- metal_device_information()
   mtl_ctx <- metal_make_context(device = mtl_dvcs[[1]])
-  mtl_program <- metal_make_program(metal_file = tmp_metal,
-                                    metallib_file = tmp_metallib,
-                                    context = mtl_ctx)
+  if (metal_compiler_is_available()) {
+    mtl_program <- metal_make_program(metal_file = tmp_metal,
+                                      metallib_file = tmp_metallib,
+                                      context = mtl_ctx)
+  } else {
+    mtl_program <- metal_make_program(metal_file = tmp_metal,
+                                      context = mtl_ctx)
+  }
   mtl_knl <- metal_make_kernelptr(program = mtl_program,
                                   context = mtl_ctx,
                                   kernel_names = "metal_mm_naive")
@@ -372,7 +383,8 @@ if (opencl_is_available() &
        res02,
        pch = 46,
        xlab = "builtin",
-       ylab = "OpenCL")
+       ylab = "OpenCL",
+       main = "deviation")
 }
 ```
 
@@ -396,7 +408,8 @@ if (cuda_is_available() &
        res03,
        pch = 46,
        xlab = "builtin",
-       ylab = "CUDA")
+       ylab = "CUDA",
+       main = "deviation")
 }
 if (metal_is_available() &
     metal_devices_exist()) {
@@ -423,13 +436,13 @@ if (metal_is_available() &
 
     ## [1] "Builtin implementation:"
     ##    user  system elapsed 
-    ##   0.031   0.001   0.031 
+    ##   0.031   0.000   0.032 
     ## [1] "OpenCL implementation:"
     ##    user  system elapsed 
-    ##   0.002   0.002   0.016 
+    ##   0.002   0.002   0.020 
     ## [1] "Metal implementation:"
     ##    user  system elapsed 
-    ##   0.001   0.000   0.006
+    ##   0.002   0.001   0.005
 
 This is currently the limit of `ardea`’s functionality. This package
 began mostly as a curiousity project with Metal, and turning it into a
