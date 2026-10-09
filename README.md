@@ -1,7 +1,7 @@
 ardea 0.1.1
 ================
 Nicholas Cooley
-2026-10-08
+2026-10-09
 
 - [Introduction](#introduction)
   - [Installation](#installation)
@@ -15,8 +15,10 @@ Nicholas Cooley
 <!-- badges: start -->
 
 [![R-CMD-check](https://github.com/npcooley/ardea/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/npcooley/ardea/actions/workflows/R-CMD-check.yaml)
+[![CRAN
+status](https://www.r-pkg.org/badges/version/ardea)](https://CRAN.R-project.org/package=ardea)
 [![Lifecycle:
-maturing](https://img.shields.io/badge/lifecycle-maturing-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html)
+stable](https://img.shields.io/badge/lifecycle-stable-blue.svg)](https://lifecycle.r-lib.org/articles/stages.html)
 <!-- badges: end -->
 
 # Introduction
@@ -65,11 +67,11 @@ currently supported.
 # Installation Details
 
 `ardea` goes through a fair amount of gymnastics to detect capabilities
-and manage installation. A series of `ARDEA_<FRAMEWORK>_<KEYWORD>`
-environment variables will be ingested by the configure script if
-present and are used *during build*, so users can hypothetically build
-out containers that may land on diverse resources where these can be
-re-set for the new environment.
+and manage its own installation. A series of
+`ARDEA_<FRAMEWORK>_<KEYWORD>` environment variables will be ingested by
+the configure script *if present* and are used *during build*, so users
+can hypothetically correctly specify unique or unusual installation
+setups.
 
 ## OpenCL
 
@@ -436,13 +438,13 @@ if (metal_is_available() &
 
     ## [1] "Builtin implementation:"
     ##    user  system elapsed 
-    ##   0.031   0.000   0.032 
+    ##   0.035   0.001   0.036 
     ## [1] "OpenCL implementation:"
     ##    user  system elapsed 
-    ##   0.002   0.002   0.020 
+    ##   0.002   0.004   0.013 
     ## [1] "Metal implementation:"
     ##    user  system elapsed 
-    ##   0.002   0.001   0.005
+    ##   0.002   0.001   0.004
 
 This is currently the limit of `ardea`’s functionality. This package
 began mostly as a curiousity project with Metal, and turning it into a

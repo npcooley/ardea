@@ -12,7 +12,8 @@ output:
 
 <!-- badges: start -->
 [![R-CMD-check](https://github.com/npcooley/ardea/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/npcooley/ardea/actions/workflows/R-CMD-check.yaml)
-[![Lifecycle: maturing](https://img.shields.io/badge/lifecycle-maturing-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html)
+[![CRAN status](https://www.r-pkg.org/badges/version/ardea)](https://CRAN.R-project.org/package=ardea)
+[![Lifecycle: stable](https://img.shields.io/badge/lifecycle-stable-blue.svg)](https://lifecycle.r-lib.org/articles/stages.html)
 <!-- badges: end -->
 
 ```{r setup_chunk_opts, include = FALSE}
@@ -55,7 +56,7 @@ Because I do not have a Windows development environment, Windows is not currentl
 
 # Installation Details
 
-`ardea` goes through a fair amount of gymnastics to detect capabilities and manage installation. A series of `ARDEA_<FRAMEWORK>_<KEYWORD>` environment variables will be ingested by the configure script if present and are used *during build*, so users can hypothetically build out containers that may land on diverse resources where these can be re-set for the new environment.
+`ardea` goes through a fair amount of gymnastics to detect capabilities and manage its own installation. A series of `ARDEA_<FRAMEWORK>_<KEYWORD>` environment variables will be ingested by the configure script *if present* and are used *during build*, so users can hypothetically correctly specify unique or unusual installation setups.
 
 ## OpenCL
 
